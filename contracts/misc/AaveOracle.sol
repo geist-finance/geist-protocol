@@ -18,23 +18,18 @@ import {SafeERC20} from '../dependencies/openzeppelin/contracts/SafeERC20.sol';
 contract AaveOracle is IPriceOracleGetter, Ownable {
   using SafeERC20 for IERC20;
 
-  event WethSet(address indexed weth);
   event AssetSourceUpdated(address indexed asset, address indexed source);
 
   mapping(address => IPriceFeed) private assetsSources;
-  address public immutable WETH;
 
   /// @notice Constructor
   /// @param assets The addresses of the assets
   /// @param sources The address of the source of each asset
   constructor(
     address[] memory assets,
-    address[] memory sources,
-    address weth
+    address[] memory sources
   ) public {
     _setAssetsSources(assets, sources);
-    WETH = weth;
-    emit WethSet(weth);
   }
 
   /// @notice External function called by the Aave governance to set or replace sources of assets
@@ -59,27 +54,19 @@ contract AaveOracle is IPriceOracleGetter, Ownable {
   }
 
   /// @notice Gets an asset price by address
+  /// @dev All assets are priced relative to USD
   /// @param asset The asset address
   function updateAssetPrice(address asset) public override returns (uint256) {
     IPriceFeed source = assetsSources[asset];
-
-    if (asset == WETH) {
-      return 1 ether;
-    } else {
-      return source.updatePrice();
-    }
+    return source.updatePrice();
   }
 
   /// @notice Gets an asset price by address
+  /// @dev All assets are priced relative to USD
   /// @param asset The asset address
   function getAssetPrice(address asset) public view override returns (uint256) {
     IPriceFeed source = assetsSources[asset];
-
-    if (asset == WETH) {
-      return 1 ether;
-    } else {
-      return source.fetchPrice();
-    }
+    return source.fetchPrice();
   }
 
   /// @notice Gets a list of prices from a list of assets addresses
