@@ -4,7 +4,7 @@ pragma solidity 0.6.12;
 
 import "../interfaces/IPriceFeed.sol";
 import "../interfaces/IBandStdReference.sol";
-import "../interfaces/IAggregatorV3.sol";
+import "../interfaces/IChainlinkAggregator.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
 
 /*
@@ -20,7 +20,7 @@ contract PriceFeed is IPriceFeed {
 
     uint constant public DECIMAL_PRECISION = 1e18;
 
-    IAggregatorV3 public chainlinkOracle;  // Mainnet Chainlink aggregator
+    IChainlinkAggregator public chainlinkOracle;  // Mainnet Chainlink aggregator
     IBandStdReference public bandOracle;  // Wrapper contract that calls the Band system
 
     string public bandBase;
@@ -75,7 +75,7 @@ contract PriceFeed is IPriceFeed {
     // --- Dependency setters ---
 
     constructor(
-        IAggregatorV3 _chainlinkOracleAddress,
+        IChainlinkAggregator _chainlinkOracleAddress,
         IBandStdReference _bandOracleAddress,
         string memory _bandBase
     )

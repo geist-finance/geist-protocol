@@ -276,15 +276,15 @@ contract LendingPoolCollateralManager is
     address debtAsset,
     uint256 debtToCover,
     uint256 userCollateralBalance
-  ) internal view returns (uint256, uint256) {
+  ) internal returns (uint256, uint256) {
     uint256 collateralAmount = 0;
     uint256 debtAmountNeeded = 0;
     IPriceOracleGetter oracle = IPriceOracleGetter(_addressesProvider.getPriceOracle());
 
     AvailableCollateralToLiquidateLocalVars memory vars;
 
-    vars.collateralPrice = oracle.getAssetPrice(collateralAsset);
-    vars.debtAssetPrice = oracle.getAssetPrice(debtAsset);
+    vars.collateralPrice = oracle.updateAssetPrice(collateralAsset);
+    vars.debtAssetPrice = oracle.updateAssetPrice(debtAsset);
 
     (, , vars.liquidationBonus, vars.collateralDecimals, ) = collateralReserve
       .configuration

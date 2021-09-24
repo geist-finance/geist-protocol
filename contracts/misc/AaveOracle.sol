@@ -5,7 +5,7 @@ import {Ownable} from '../dependencies/openzeppelin/contracts/Ownable.sol';
 import {IERC20} from '../dependencies/openzeppelin/contracts/IERC20.sol';
 
 import {IPriceOracleGetter} from '../interfaces/IPriceOracleGetter.sol';
-import {IChainlinkAggregator} from '../interfaces/IChainlinkAggregator.sol';
+import {IPriceFeed} from '../interfaces/IPriceFeed.sol';
 import {SafeERC20} from '../dependencies/openzeppelin/contracts/SafeERC20.sol';
 
 /// @title AaveOracle
@@ -20,24 +20,18 @@ contract AaveOracle is IPriceOracleGetter, Ownable {
 
   event WethSet(address indexed weth);
   event AssetSourceUpdated(address indexed asset, address indexed source);
-  event FallbackOracleUpdated(address indexed fallbackOracle);
 
-  mapping(address => IChainlinkAggregator) private assetsSources;
-  IPriceOracleGetter private _fallbackOracle;
+  mapping(address => IPriceFeed) private assetsSources;
   address public immutable WETH;
 
   /// @notice Constructor
   /// @param assets The addresses of the assets
   /// @param sources The address of the source of each asset
-  /// @param fallbackOracle The address of the fallback oracle to use if the data of an
-  ///        aggregator is not consistent
   constructor(
     address[] memory assets,
     address[] memory sources,
-    address fallbackOracle,
     address weth
   ) public {
-    _setFallbackOracle(fallbackOracle);
     _setAssetsSources(assets, sources);
     WETH = weth;
     emit WethSet(weth);
@@ -53,47 +47,38 @@ contract AaveOracle is IPriceOracleGetter, Ownable {
     _setAssetsSources(assets, sources);
   }
 
-  /// @notice Sets the fallbackOracle
-  /// - Callable only by the Aave governance
-  /// @param fallbackOracle The address of the fallbackOracle
-  function setFallbackOracle(address fallbackOracle) external onlyOwner {
-    _setFallbackOracle(fallbackOracle);
-  }
-
   /// @notice Internal function to set the sources for each asset
   /// @param assets The addresses of the assets
   /// @param sources The address of the source of each asset
   function _setAssetsSources(address[] memory assets, address[] memory sources) internal {
     require(assets.length == sources.length, 'INCONSISTENT_PARAMS_LENGTH');
     for (uint256 i = 0; i < assets.length; i++) {
-      assetsSources[assets[i]] = IChainlinkAggregator(sources[i]);
+      assetsSources[assets[i]] = IPriceFeed(sources[i]);
       emit AssetSourceUpdated(assets[i], sources[i]);
     }
   }
 
-  /// @notice Internal function to set the fallbackOracle
-  /// @param fallbackOracle The address of the fallbackOracle
-  function _setFallbackOracle(address fallbackOracle) internal {
-    _fallbackOracle = IPriceOracleGetter(fallbackOracle);
-    emit FallbackOracleUpdated(fallbackOracle);
+  /// @notice Gets an asset price by address
+  /// @param asset The asset address
+  function updateAssetPrice(address asset) public override returns (uint256) {
+    IPriceFeed source = assetsSources[asset];
+
+    if (asset == WETH) {
+      return 1 ether;
+    } else {
+      return source.updatePrice();
+    }
   }
 
   /// @notice Gets an asset price by address
   /// @param asset The asset address
   function getAssetPrice(address asset) public view override returns (uint256) {
-    IChainlinkAggregator source = assetsSources[asset];
+    IPriceFeed source = assetsSources[asset];
 
     if (asset == WETH) {
       return 1 ether;
-    } else if (address(source) == address(0)) {
-      return _fallbackOracle.getAssetPrice(asset);
     } else {
-      int256 price = IChainlinkAggregator(source).latestAnswer();
-      if (price > 0) {
-        return uint256(price);
-      } else {
-        return _fallbackOracle.getAssetPrice(asset);
-      }
+      return source.fetchPrice();
     }
   }
 
@@ -114,9 +99,4 @@ contract AaveOracle is IPriceOracleGetter, Ownable {
     return address(assetsSources[asset]);
   }
 
-  /// @notice Gets the address of the fallback oracle
-  /// @return address The addres of the fallback oracle
-  function getFallbackOracle() external view returns (address) {
-    return address(_fallbackOracle);
-  }
 }
