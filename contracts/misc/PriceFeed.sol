@@ -30,7 +30,9 @@ contract PriceFeed is IPriceFeed {
     uint constant public TARGET_DIGITS = 18;
 
     // Maximum time period allowed since Chainlink's latest round data timestamp, beyond which Chainlink is considered frozen.
-    uint constant public TIMEOUT = 14400;  // 4 hours: 60 * 60 * 4
+    // For stablecoins we recommend 90000, as Chainlink updates once per day when there is no significant price movement
+    // For volatile assets we recommend 14400 (4 hours)
+    uint immutable public TIMEOUT;
 
     // Maximum deviation allowed between two consecutive Chainlink oracle prices. 18-digit precision.
     uint constant public MAX_PRICE_DEVIATION_FROM_PREVIOUS_ROUND =  5e17; // 50%
@@ -77,12 +79,15 @@ contract PriceFeed is IPriceFeed {
     constructor(
         IChainlinkAggregator _chainlinkOracleAddress,
         IBandStdReference _bandOracleAddress,
+        uint256 _timeout,
         string memory _bandBase
     )
         public
     {
         chainlinkOracle = _chainlinkOracleAddress;
         bandOracle = _bandOracleAddress;
+
+        TIMEOUT = _timeout;
 
         bandBase = _bandBase;
 
@@ -93,8 +98,11 @@ contract PriceFeed is IPriceFeed {
         ChainlinkResponse memory chainlinkResponse = _getCurrentChainlinkResponse();
         ChainlinkResponse memory prevChainlinkResponse = _getPrevChainlinkResponse(chainlinkResponse.roundId, chainlinkResponse.decimals);
 
-        require(!_chainlinkIsBroken(chainlinkResponse, prevChainlinkResponse) && !_chainlinkIsFrozen(chainlinkResponse),
-            "PriceFeed: Chainlink must be working and current");
+        require(
+            !_chainlinkIsBroken(chainlinkResponse, prevChainlinkResponse) &&
+            block.timestamp.sub(chainlinkResponse.timestamp) < _timeout,
+            "PriceFeed: Chainlink must be working and current"
+        );
 
         lastGoodPrice = _scaleChainlinkPriceByDigits(uint256(chainlinkResponse.answer), chainlinkResponse.decimals);
     }
