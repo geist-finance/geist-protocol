@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: agpl-3.0
-pragma solidity 0.6.12;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 import {IERC20Detailed} from '../dependencies/openzeppelin/contracts/IERC20Detailed.sol';
@@ -28,7 +28,7 @@ contract UiPoolDataProvider is IUiPoolDataProvider {
   IAaveIncentivesController public immutable incentivesController;
   IPriceOracleGetter public immutable oracle;
 
-  constructor(IAaveIncentivesController _incentivesController, IPriceOracleGetter _oracle) public {
+  constructor(IAaveIncentivesController _incentivesController, IPriceOracleGetter _oracle) {
     incentivesController = _incentivesController;
     oracle = _oracle;
   }
@@ -200,7 +200,7 @@ contract UiPoolDataProvider is IUiPoolDataProvider {
       }
     }
 
-    
+
     IncentivesControllerData memory incentivesControllerData;
 
     if (address(0) != address(incentivesController)) {

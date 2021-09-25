@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: agpl-3.0
-pragma solidity 0.6.12;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 import {StableDebtToken} from '../protocol/tokenization/StableDebtToken.sol';
@@ -12,7 +12,7 @@ contract StableAndVariableTokensHelper is Ownable {
   address private addressesProvider;
   event deployedContracts(address stableToken, address variableToken);
 
-  constructor(address payable _pool, address _addressesProvider) public {
+  constructor(address payable _pool, address _addressesProvider) {
     pool = _pool;
     addressesProvider = _addressesProvider;
   }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.12;
+pragma solidity 0.7.6;
 
 import "../interfaces/IPriceFeed.sol";
 import "../interfaces/IBandStdReference.sol";
@@ -81,9 +81,7 @@ contract PriceFeed is IPriceFeed {
         IBandStdReference _bandOracleAddress,
         uint256 _timeout,
         string memory _bandBase
-    )
-        public
-    {
+    ) {
         chainlinkOracle = _chainlinkOracleAddress;
         bandOracle = _bandOracleAddress;
 
