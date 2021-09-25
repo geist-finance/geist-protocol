@@ -12,6 +12,7 @@ interface ILendingPoolConfigurator {
     address underlyingAsset;
     address treasury;
     address incentivesController;
+    uint256 allocPoint;
     string underlyingAssetName;
     string aTokenName;
     string aTokenSymbol;
