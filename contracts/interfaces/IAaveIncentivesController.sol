@@ -54,12 +54,12 @@ interface IAaveIncentivesController {
 
   /**
    * @dev Called by the corresponding asset on any update that affects the rewards distribution
-   * @param asset The address of the user
+   * @param user The address of the user
    * @param userBalance The balance of the user of the asset in the lending pool
    * @param totalSupply The total supply of the asset in the lending pool
    **/
   function handleAction(
-    address asset,
+    address user,
     uint256 userBalance,
     uint256 totalSupply
   ) external;

@@ -412,7 +412,7 @@ contract StableDebtToken is IStableDebtToken, DebtTokenBase {
     _balances[account] = oldAccountBalance.add(amount);
 
     if (address(_incentivesController) != address(0)) {
-      _incentivesController.handleAction(account, oldTotalSupply, oldAccountBalance);
+      _incentivesController.handleAction(account, oldAccountBalance, oldTotalSupply);
     }
   }
 
@@ -431,7 +431,7 @@ contract StableDebtToken is IStableDebtToken, DebtTokenBase {
     _balances[account] = oldAccountBalance.sub(amount, Errors.SDT_BURN_EXCEEDS_BALANCE);
 
     if (address(_incentivesController) != address(0)) {
-      _incentivesController.handleAction(account, oldTotalSupply, oldAccountBalance);
+      _incentivesController.handleAction(account, oldAccountBalance, oldTotalSupply);
     }
   }
 }
