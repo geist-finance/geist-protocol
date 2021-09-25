@@ -10,6 +10,7 @@ import "../dependencies/openzeppelin/contracts/Ownable.sol";
 contract MasterChef is Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
+
     // Info of each user.
     struct UserInfo {
         uint256 amount;
@@ -17,7 +18,7 @@ contract MasterChef is Ownable {
     }
     // Info of each pool.
     struct PoolInfo {
-        IERC20 lpToken; // Address of LP token contract.
+        uint256 totalSupply;
         uint256 allocPoint; // How many allocation points assigned to this pool.
         uint256 lastRewardTime; // Last second that reward distribution occurs.
         uint256 accRewardPerShare; // Accumulated rewards per share, times 1e12. See below.
@@ -28,33 +29,39 @@ contract MasterChef is Ownable {
         uint128 rewardsPerSecond;
     }
 
+    address public poolConfigurator;
+
     // TODO Minter public rewardMinter;
     uint256 public rewardsPerSecond;
+
     // Info of each pool.
-    PoolInfo[] public poolInfo;
+    address[] public registeredTokens;
+    mapping(address => PoolInfo) public poolInfo;
+
     // Data about the future reward rates. emissionSchedule stored in reverse chronological order,
     // whenever the number of blocks since the start block exceeds the next block offset a new
     // reward rate is applied.
     EmissionPoint[] public emissionSchedule;
-    // Info of each user that stakes LP tokens.
-    mapping(uint256 => mapping(address => UserInfo)) public userInfo;
+    // token => user => Info of each user that stakes LP tokens.
+    mapping(address => mapping(address => UserInfo)) public userInfo;
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
     // The block number when reward mining starts.
     uint256 public startTime;
-    event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
-    event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
-    event EmergencyWithdraw(
+
+    event BalanceUpdated(
+        address indexed token,
         address indexed user,
-        uint256 indexed pid,
-        uint256 amount
+        uint256 balance,
+        uint256 totalSupply
     );
 
     constructor(
         uint128[] memory _startTimeOffset,
         uint128[] memory _rewardsPerSecond,
-        IERC20 _fixedRewardToken
+        address _poolConfigurator
     ) {
+        poolConfigurator = _poolConfigurator;
         uint256 length = _startTimeOffset.length;
         for (uint256 i = length - 1; i + 1 != 0; i--) {
             emissionSchedule.push(
@@ -72,51 +79,52 @@ contract MasterChef is Ownable {
         startTime = block.timestamp;
     }
 
-    // Add a new lp to the pool. Can only be called by the owner.
-    // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
-    function addPool(
-        uint256 _allocPoint,
-        IERC20 _lpToken
-    ) public onlyOwner {
+    // Add a new lp to the pool. Can only be called by the poolConfigurator.
+    function addPool(address _token, uint256 _allocPoint) external {
+        require(msg.sender == poolConfigurator);
+        require(poolInfo[_token].lastRewardTime == 0);
         _massUpdatePools();
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
-        poolInfo.push(
-            PoolInfo({
-                lpToken: _lpToken,
-                allocPoint: _allocPoint,
-                lastRewardTime: block.timestamp,
-                accRewardPerShare: 0
-            })
-        );
+        registeredTokens.push(_token);
+        poolInfo[_token] = PoolInfo({
+            totalSupply: 0,
+            allocPoint: _allocPoint,
+            lastRewardTime: block.timestamp,
+            accRewardPerShare: 0
+        });
     }
 
-    // Update the given pool's SUSHI allocation point. Can only be called by the owner.
-    function set(
-        uint256 _pid,
-        uint256 _allocPoint,
-        bool _withUpdate
+    // Update the given pool's allocation point. Can only be called by the owner.
+    function batchUpdateAllocPoint(
+        address[] calldata _tokens,
+        uint256[] calldata _allocPoints
     ) public onlyOwner {
+        require(_tokens.length == _allocPoints.length);
         _massUpdatePools();
-        totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(
-            _allocPoint
-        );
-        poolInfo[_pid].allocPoint = _allocPoint;
+        uint256 _totalAllocPoint = totalAllocPoint;
+        for (uint256 i = 0; i < _tokens.length; i++) {
+            PoolInfo storage pool = poolInfo[_tokens[i]];
+            require(pool.lastRewardTime > 0);
+            _totalAllocPoint = _totalAllocPoint.sub(pool.allocPoint).add(_allocPoints[i]);
+            pool.allocPoint = _allocPoints[i];
+        }
+        totalAllocPoint = _totalAllocPoint;
     }
 
     function poolLength() external view returns (uint256) {
-        return poolInfo.length;
+        return registeredTokens.length;
     }
 
     // View function to see pending SUSHIs on frontend.
-    function claimableReward(uint256 _pid, address _user)
+    function claimableReward(address _token, address _user)
         external
         view
         returns (uint256)
     {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][_user];
+        PoolInfo storage pool = poolInfo[_token];
+        UserInfo storage user = userInfo[_token][_user];
         uint256 accRewardPerShare = pool.accRewardPerShare;
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        uint256 lpSupply = pool.totalSupply;
         if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && totalAllocPoint != 0) {
             uint256 duration = block.timestamp.sub(pool.lastRewardTime);
             uint256 reward = duration.mul(rewardsPerSecond).mul(pool.allocPoint).div(totalAllocPoint);
@@ -128,9 +136,9 @@ contract MasterChef is Ownable {
     // Update reward variables for all pools
     function _massUpdatePools() internal {
         uint256 totalAP = totalAllocPoint;
-        uint256 length = poolInfo.length;
-        for (uint256 pid = 0; pid < length; ++pid) {
-            _updatePool(pid, totalAP);
+        uint256 length = registeredTokens.length;
+        for (uint256 i = 0; i < length; ++i) {
+            _updatePool(registeredTokens[i], totalAP);
         }
         length = emissionSchedule.length;
         if (startTime > 0 && length > 0) {
@@ -143,12 +151,12 @@ contract MasterChef is Ownable {
     }
 
     // Update reward variables of the given pool to be up-to-date.
-    function _updatePool(uint256 _pid, uint256 _totalAllocPoint) internal {
-        PoolInfo storage pool = poolInfo[_pid];
+    function _updatePool(address _token, uint256 _totalAllocPoint) internal {
+        PoolInfo storage pool = poolInfo[_token];
         if (block.timestamp <= pool.lastRewardTime) {
             return;
         }
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        uint256 lpSupply = pool.totalSupply;
         if (lpSupply == 0 || _totalAllocPoint == 0) {
             pool.lastRewardTime = block.timestamp;
             return;
@@ -159,10 +167,10 @@ contract MasterChef is Ownable {
         pool.lastRewardTime = block.timestamp;
     }
 
-    // Deposit LP tokens into the contract. Also triggers a claim.
-    function deposit(uint256 _pid, uint256 _amount) public {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+    function handleAction(address _user, uint256 _balance, uint256 _totalSupply) external {
+        PoolInfo storage pool = poolInfo[msg.sender];
+        require(pool.lastRewardTime > 0);
+        UserInfo storage user = userInfo[msg.sender][_user];
         _massUpdatePools();
         if (user.amount > 0) {
             uint256 pending =
@@ -171,53 +179,20 @@ contract MasterChef is Ownable {
                 );
             // TODO rewardMinter.mint(msg.sender, pending);
         }
-        pool.lpToken.safeTransferFrom(
-            address(msg.sender),
-            address(this),
-            _amount
-        );
-        user.amount = user.amount.add(_amount);
+        user.amount = _balance;
         user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
-        emit Deposit(msg.sender, _pid, _amount);
-    }
-
-    // Withdraw LP tokens. Also triggers a claim.
-    function withdraw(uint256 _pid, uint256 _amount) public {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
-        require(user.amount >= _amount, "withdraw: not good");
-        _massUpdatePools();
-        uint256 pending =
-            user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
-                user.rewardDebt
-            );
-        if (pending > 0) {
-            // TODO rewardMinter.mint(msg.sender, pending);
-        }
-        user.amount = user.amount.sub(_amount);
-        user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
-        pool.lpToken.safeTransfer(address(msg.sender), _amount);
-        emit Withdraw(msg.sender, _pid, _amount);
-    }
-
-    // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
-        pool.lpToken.safeTransfer(address(msg.sender), user.amount);
-        emit EmergencyWithdraw(msg.sender, _pid, user.amount);
-        user.amount = 0;
-        user.rewardDebt = 0;
+        pool.totalSupply = _totalSupply;
+        emit BalanceUpdated(msg.sender, _user, _balance, _totalSupply);
     }
 
     // Claim pending rewards for one or more pools.
     // Rewards are not received directly, they are minted by the rewardMinter.
-    function claim(uint256[] calldata _pids) external {
+    function claim(address[] calldata _tokens) external {
         _massUpdatePools();
         uint256 pending;
-        for (uint i = 0; i < _pids.length; i++) {
-            PoolInfo storage pool = poolInfo[_pids[i]];
-            UserInfo storage user = userInfo[_pids[i]][msg.sender];
+        for (uint i = 0; i < _tokens.length; i++) {
+            PoolInfo storage pool = poolInfo[_tokens[i]];
+            UserInfo storage user = userInfo[_tokens[i]][msg.sender];
             pending = pending.add(user.amount.mul(pool.accRewardPerShare).div(1e12).sub(user.rewardDebt));
             user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         }
