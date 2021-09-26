@@ -83,7 +83,7 @@ contract MasterChef is Ownable {
     function addPool(address _token, uint256 _allocPoint) external {
         require(msg.sender == poolConfigurator);
         require(poolInfo[_token].lastRewardTime == 0);
-        _massUpdatePools();
+        _updateEmissions();
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
         registeredTokens.push(_token);
         poolInfo[_token] = PoolInfo({
@@ -125,12 +125,25 @@ contract MasterChef is Ownable {
         UserInfo storage user = userInfo[_token][_user];
         uint256 accRewardPerShare = pool.accRewardPerShare;
         uint256 lpSupply = pool.totalSupply;
-        if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && totalAllocPoint != 0) {
+        if (block.timestamp > pool.lastRewardTime && lpSupply != 0) {
             uint256 duration = block.timestamp.sub(pool.lastRewardTime);
             uint256 reward = duration.mul(rewardsPerSecond).mul(pool.allocPoint).div(totalAllocPoint);
             accRewardPerShare = accRewardPerShare.add(reward.mul(1e12).div(lpSupply));
         }
         return user.amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+    }
+
+
+    function _updateEmissions() internal {
+        uint256 length = emissionSchedule.length;
+        if (startTime > 0 && length > 0) {
+            EmissionPoint memory e = emissionSchedule[length-1];
+            if (block.timestamp.sub(startTime) > e.startTimeOffset) {
+                 _massUpdatePools();
+                rewardsPerSecond = uint256(e.rewardsPerSecond);
+                emissionSchedule.pop();
+            }
+        }
     }
 
     // Update reward variables for all pools
@@ -139,14 +152,6 @@ contract MasterChef is Ownable {
         uint256 length = registeredTokens.length;
         for (uint256 i = 0; i < length; ++i) {
             _updatePool(registeredTokens[i], totalAP);
-        }
-        length = emissionSchedule.length;
-        if (startTime > 0 && length > 0) {
-            EmissionPoint memory e = emissionSchedule[length-1];
-            if (block.timestamp.sub(startTime) > e.startTimeOffset) {
-                rewardsPerSecond = uint256(e.rewardsPerSecond);
-                emissionSchedule.pop();
-            }
         }
     }
 
@@ -157,7 +162,7 @@ contract MasterChef is Ownable {
             return;
         }
         uint256 lpSupply = pool.totalSupply;
-        if (lpSupply == 0 || _totalAllocPoint == 0) {
+        if (lpSupply == 0) {
             pool.lastRewardTime = block.timestamp;
             return;
         }
@@ -170,8 +175,9 @@ contract MasterChef is Ownable {
     function handleAction(address _user, uint256 _balance, uint256 _totalSupply) external {
         PoolInfo storage pool = poolInfo[msg.sender];
         require(pool.lastRewardTime > 0);
+        _updateEmissions();
+        _updatePool(msg.sender, totalAllocPoint);
         UserInfo storage user = userInfo[msg.sender][_user];
-        _massUpdatePools();
         if (user.amount > 0) {
             uint256 pending =
                 user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
@@ -188,10 +194,13 @@ contract MasterChef is Ownable {
     // Claim pending rewards for one or more pools.
     // Rewards are not received directly, they are minted by the rewardMinter.
     function claim(address[] calldata _tokens) external {
-        _massUpdatePools();
+        _updateEmissions();
         uint256 pending;
+        uint256 _totalAllocPoint = totalAllocPoint;
         for (uint i = 0; i < _tokens.length; i++) {
             PoolInfo storage pool = poolInfo[_tokens[i]];
+            require(pool.lastRewardTime > 0);
+            _updatePool(_tokens[i], _totalAllocPoint);
             UserInfo storage user = userInfo[_tokens[i]][msg.sender];
             pending = pending.add(user.amount.mul(pool.accRewardPerShare).div(1e12).sub(user.rewardDebt));
             user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
