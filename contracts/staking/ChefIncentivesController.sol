@@ -2,6 +2,7 @@
 
 pragma solidity 0.7.6;
 
+import "./interfaces/IMultiFeeDistribution.sol";
 import "../dependencies/openzeppelin/contracts/IERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
@@ -33,7 +34,7 @@ contract ChefIncentivesController is Ownable {
 
     address public poolConfigurator;
 
-    // TODO Minter public rewardMinter;
+    IMultiFeeDistribution public rewardMinter;
     uint256 public rewardsPerSecond;
 
     // Info of each pool.
@@ -185,7 +186,7 @@ contract ChefIncentivesController is Ownable {
                 user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
                     user.rewardDebt
                 );
-            // TODO rewardMinter.mint(msg.sender, pending);
+            rewardMinter.mint(_user, pending, true);
         }
         user.amount = _balance;
         user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
@@ -195,7 +196,7 @@ contract ChefIncentivesController is Ownable {
 
     // Claim pending rewards for one or more pools.
     // Rewards are not received directly, they are minted by the rewardMinter.
-    function claim(address[] calldata _tokens) external {
+    function claim(address[] calldata _tokens, address _receiver) external {
         _updateEmissions();
         uint256 pending;
         uint256 _totalAllocPoint = totalAllocPoint;
@@ -208,7 +209,7 @@ contract ChefIncentivesController is Ownable {
             user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         }
         if (pending > 0) {
-            // TODO rewardMinter.mint(msg.sender, pending);
+            rewardMinter.mint(_receiver, pending, true);
         }
     }
 

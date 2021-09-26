@@ -1,6 +1,7 @@
 pragma solidity 0.7.6;
 pragma abicoder v2;
 
+import "./interfaces/IMultiFeeDistribution.sol";
 import "../dependencies/openzeppelin/contracts/IERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
@@ -14,7 +15,7 @@ interface IMintableToken is IERC20 {
 
 // Based on Ellipsis EPS Staker
 // https://github.com/ellipsis-finance/ellipsis/blob/master/contracts/EpsStaker.sol
-contract MultiFeeDistribution is ReentrancyGuard, Ownable {
+contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable {
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -93,7 +94,8 @@ contract MultiFeeDistribution is ReentrancyGuard, Ownable {
         address _rewardsToken,
         address _distributor
     )
-        public
+        external
+        override
         onlyOwner
     {
         require(rewardData[_rewardsToken].lastUpdateTime == 0);
@@ -288,12 +290,12 @@ contract MultiFeeDistribution is ReentrancyGuard, Ownable {
     // Mint new tokens
     // Minted tokens receive rewards normally but incur a 50% penalty when
     // withdrawn before lockDuration has passed.
-    function mint(address user, uint256 amount, bool lock) external updateReward(user) {
+    function mint(address user, uint256 amount, bool withPenalty) external override updateReward(user) {
         require(minters[msg.sender]);
         totalSupply = totalSupply.add(amount);
         Balances storage bal = balances[user];
         bal.total = bal.total.add(amount);
-        if (lock) {
+        if (withPenalty) {
             bal.earned = bal.earned.add(amount);
             uint256 unlockTime = block.timestamp.div(rewardsDuration).mul(rewardsDuration).add(lockDuration);
             LockedBalance[] storage earnings = userEarnings[user];
