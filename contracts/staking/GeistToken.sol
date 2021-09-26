@@ -24,9 +24,10 @@ contract GeistToken is IERC20 {
         emit Transfer(address(0), msg.sender, 0);
     }
 
-    function setMinter(address _minter) external {
+    function setMinter(address _minter) external returns (bool) {
         require(minter == address(0));
         minter = _minter;
+        return true;
     }
 
     function approve(address _spender, uint256 _value) external override returns (bool) {

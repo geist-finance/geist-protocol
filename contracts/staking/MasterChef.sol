@@ -73,11 +73,13 @@ contract MasterChef is Ownable {
     constructor(
         uint128[] memory _startTimeOffset,
         uint128[] memory _rewardsPerSecond,
-        address _poolConfigurator
+        address _poolConfigurator,
+        IMultiFeeDistribution _rewardMinter
     )
         Ownable()
     {
         poolConfigurator = _poolConfigurator;
+        rewardMinter = _rewardMinter;
         uint256 length = _startTimeOffset.length;
         for (uint256 i = length - 1; i + 1 != 0; i--) {
             emissionSchedule.push(

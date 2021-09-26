@@ -38,14 +38,10 @@ contract MerkleDistributor is Ownable {
     // This is a packed array of booleans.
     mapping(uint256 => mapping(uint256 => uint256)) private claimedBitMap;
 
-    constructor(uint256 _maxMintable) Ownable() {
+    constructor(IMultiFeeDistribution _rewardMinter, uint256 _maxMintable) Ownable() {
+        rewardMinter = _rewardMinter;
         maxMintableTokens = _maxMintable;
         startTime = block.timestamp;
-    }
-
-    function setMinter(IMultiFeeDistribution _rewardMinter) public onlyOwner {
-        require(rewardMinter == IMultiFeeDistribution(0));
-        rewardMinter = _rewardMinter;
     }
 
     function addClaimRecord(bytes32 _root, uint256 _duration, uint256 _total) external onlyOwner {

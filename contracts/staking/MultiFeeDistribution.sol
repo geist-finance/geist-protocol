@@ -11,6 +11,7 @@ import "../dependencies/openzeppelin/contracts/ReentrancyGuard.sol";
 
 interface IMintableToken is IERC20 {
     function mint(address _receiver, uint256 _amount) external returns (bool);
+    function setMinter(address _minter) external returns (bool);
 }
 
 // Based on Ellipsis EPS Staker
@@ -56,6 +57,8 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
 
     // Addresses approved to call mint
     mapping(address => bool) public minters;
+    bool public mintersAreSet;
+
     // reward token -> distributor -> is approved to add rewards
     mapping(address=> mapping(address => bool)) public rewardDistributors;
 
@@ -73,16 +76,9 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(
-        address _stakingToken,
-        address[] memory _minters
-    )
-        Ownable()
-    {
+    constructor(address _stakingToken) Ownable() {
         stakingToken = IMintableToken(_stakingToken);
-        for (uint i; i < _minters.length; i++) {
-            minters[_minters[i]] = true;
-        }
+        IMintableToken(_stakingToken).setMinter(address(this));
         // First reward MUST be the staking token or things will break
         // related to the 50% penalty and distribution to locked balances
         rewardTokens.push(_stakingToken);
@@ -90,6 +86,14 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     }
 
     /* ========== ADMIN CONFIGURATION ========== */
+
+    function setMinters(address[] memory _minters) external onlyOwner {
+        require(!mintersAreSet);
+        for (uint i; i < _minters.length; i++) {
+            minters[_minters[i]] = true;
+        }
+        mintersAreSet = true;
+    }
 
     // Add a new reward token to be distributed to stakers
     function addReward(
