@@ -7,7 +7,9 @@ import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
 import "../dependencies/openzeppelin/contracts/Ownable.sol";
 
-contract MasterChef is Ownable {
+// based on the Sushi MasterChef
+// https://github.com/sushiswap/sushiswap/blob/master/contracts/MasterChef.sol
+contract ChefIncentivesController is Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
