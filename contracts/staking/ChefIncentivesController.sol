@@ -63,7 +63,9 @@ contract ChefIncentivesController is Ownable {
         uint128[] memory _startTimeOffset,
         uint128[] memory _rewardsPerSecond,
         address _poolConfigurator
-    ) {
+    )
+        Ownable()
+    {
         poolConfigurator = _poolConfigurator;
         uint256 length = _startTimeOffset.length;
         for (uint256 i = length - 1; i + 1 != 0; i--) {

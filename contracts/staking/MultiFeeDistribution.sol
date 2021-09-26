@@ -76,7 +76,9 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     constructor(
         address _stakingToken,
         address[] memory _minters
-    ) Ownable() {
+    )
+        Ownable()
+    {
         stakingToken = IMintableToken(_stakingToken);
         for (uint i; i < _minters.length; i++) {
             minters[_minters[i]] = true;
