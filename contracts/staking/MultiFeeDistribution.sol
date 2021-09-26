@@ -288,20 +288,24 @@ contract MultiFeeDistribution is ReentrancyGuard, Ownable {
     // Mint new tokens
     // Minted tokens receive rewards normally but incur a 50% penalty when
     // withdrawn before lockDuration has passed.
-    function mint(address user, uint256 amount) external updateReward(user) {
+    function mint(address user, uint256 amount, bool lock) external updateReward(user) {
         require(minters[msg.sender]);
         totalSupply = totalSupply.add(amount);
         Balances storage bal = balances[user];
         bal.total = bal.total.add(amount);
-        bal.earned = bal.earned.add(amount);
-        uint256 unlockTime = block.timestamp.div(rewardsDuration).mul(rewardsDuration).add(lockDuration);
-        LockedBalance[] storage earnings = userEarnings[user];
-        uint256 idx = earnings.length;
+        if (lock) {
+            bal.earned = bal.earned.add(amount);
+            uint256 unlockTime = block.timestamp.div(rewardsDuration).mul(rewardsDuration).add(lockDuration);
+            LockedBalance[] storage earnings = userEarnings[user];
+            uint256 idx = earnings.length;
 
-        if (idx == 0 || earnings[idx-1].unlockTime < unlockTime) {
-            earnings.push(LockedBalance({amount: amount, unlockTime: unlockTime}));
+            if (idx == 0 || earnings[idx-1].unlockTime < unlockTime) {
+                earnings.push(LockedBalance({amount: amount, unlockTime: unlockTime}));
+            } else {
+                earnings[idx-1].amount = earnings[idx-1].amount.add(amount);
+            }
         } else {
-            earnings[idx-1].amount = earnings[idx-1].amount.add(amount);
+            bal.unlocked = bal.unlocked.add(amount);
         }
         stakingToken.mint(address(this), amount);
         emit Staked(user, amount);
