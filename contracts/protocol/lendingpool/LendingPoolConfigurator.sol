@@ -18,6 +18,7 @@ import {IInitializableDebtToken} from '../../interfaces/IInitializableDebtToken.
 import {IInitializableAToken} from '../../interfaces/IInitializableAToken.sol';
 import {IChefIncentivesController} from '../../interfaces/IChefIncentivesController.sol';
 import {ILendingPoolConfigurator} from '../../interfaces/ILendingPoolConfigurator.sol';
+import {IMultiFeeDistribution} from '../../interfaces/IMultiFeeDistribution.sol';
 
 /**
  * @title LendingPoolConfigurator contract
@@ -85,6 +86,7 @@ contract LendingPoolConfigurator is VersionedInitializable, ILendingPoolConfigur
         )
       );
     incentivesController.addPool(aTokenProxyAddress, input.allocPoint);
+    IMultiFeeDistribution(input.treasury).addReward(aTokenProxyAddress);
 
     address stableDebtTokenProxyAddress =
       _initTokenWithProxy(
