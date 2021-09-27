@@ -29,6 +29,9 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         uint256 rewardRate;
         uint256 lastUpdateTime;
         uint256 rewardPerTokenStored;
+        // tracks already-added balances to handle accrued interest in aToken rewards
+        // for the stakingToken this value is unused and will always be 0
+        uint256 balance;
     }
     struct Balances {
         uint256 total;
@@ -58,9 +61,6 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     // Addresses approved to call mint
     mapping(address => bool) public minters;
     bool public mintersAreSet;
-
-    // reward token -> distributor -> is approved to add rewards
-    mapping(address=> mapping(address => bool)) public rewardDistributors;
 
     // user -> reward token -> amount
     mapping(address => mapping(address => uint256)) public userRewardPerTokenPaid;
@@ -96,29 +96,11 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     }
 
     // Add a new reward token to be distributed to stakers
-    function addReward(
-        address _rewardsToken,
-        address _distributor
-    )
-        external
-        override
-        onlyOwner
-    {
+    function addReward(address _rewardsToken) external override onlyOwner {
         require(rewardData[_rewardsToken].lastUpdateTime == 0);
         rewardTokens.push(_rewardsToken);
         rewardData[_rewardsToken].lastUpdateTime = block.timestamp;
         rewardData[_rewardsToken].periodFinish = block.timestamp;
-        rewardDistributors[_rewardsToken][_distributor] = true;
-    }
-
-    // Modify approval for an address to call notifyRewardAmount
-    function approveRewardDistributor(
-        address _rewardsToken,
-        address _distributor,
-        bool _approved
-    ) external onlyOwner {
-        require(rewardData[_rewardsToken].lastUpdateTime > 0);
-        rewardDistributors[_rewardsToken][_distributor] = _approved;
     }
 
     /* ========== VIEWS ========== */
@@ -370,13 +352,25 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     // Claim all pending staking rewards
     function getReward() public nonReentrant updateReward(msg.sender) {
         for (uint i; i < rewardTokens.length; i++) {
-            address _rewardsToken = rewardTokens[i];
-            uint256 reward = rewards[msg.sender][_rewardsToken];
-            if (reward > 0) {
-                rewards[msg.sender][_rewardsToken] = 0;
-                IERC20(_rewardsToken).safeTransfer(msg.sender, reward);
-                emit RewardPaid(msg.sender, _rewardsToken, reward);
+            address token = rewardTokens[i];
+            uint256 reward = rewards[msg.sender][token];
+            if (i > 0) {
+                // for rewards other than stakingToken, every 24 hours we check if new
+                // rewards were sent to the contract or accrued via aToken interest
+                uint256 balance = rewardData[token].balance;
+                if (rewardData[token].periodFinish < block.timestamp.add(rewardsDuration - 86400)) {
+                    uint256 unseen = IERC20(token).balanceOf(address(this)).sub(balance);
+                    if (unseen > 0) {
+                        _notifyReward(token, unseen);
+                        balance = balance.add(unseen);
+                    }
+                }
+                rewardData[token].balance = balance.sub(reward);
             }
+            if (reward == 0) continue;
+            rewards[msg.sender][token] = 0;
+            IERC20(token).safeTransfer(msg.sender, reward);
+            emit RewardPaid(msg.sender, token, reward);
         }
     }
 
@@ -434,16 +428,6 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         rewardData[_rewardsToken].lastUpdateTime = block.timestamp;
         rewardData[_rewardsToken].periodFinish = block.timestamp.add(rewardsDuration);
 
-    }
-
-    function notifyRewardAmount(address _rewardsToken, uint256 reward) external updateReward(address(0)) {
-        require(rewardDistributors[_rewardsToken][msg.sender]);
-        require(reward > 0, "No reward");
-        // handle the transfer of reward tokens via `transferFrom` to reduce the number
-        // of transactions required and ensure correctness of the reward amount
-        IERC20(_rewardsToken).safeTransferFrom(msg.sender, address(this), reward);
-        _notifyReward(_rewardsToken, reward);
-        emit RewardAdded(reward);
     }
 
     // Added to support recovering LP Rewards from other systems such as BAL to be distributed to holders
