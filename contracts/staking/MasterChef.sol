@@ -53,6 +53,11 @@ contract MasterChef is Ownable {
     // The block number when reward mining starts.
     uint256 public startTime;
 
+    // account earning rewards => receiver of rewards for this account
+    // if receiver is set to address(0), rewards are paid to the earner
+    // this is used to aid 3rd party contract integrations
+    mapping (address => address) public claimReceiver;
+
     event Deposit(
         address indexed token,
         address indexed user,
@@ -139,6 +144,11 @@ contract MasterChef is Ownable {
     {
         require(poolInfo[_token].lastRewardTime != 0);
         poolInfo[_token].onwardIncentives = _incentives;
+    }
+
+    function setClaimReceiver(address _user, address _receiver) external {
+        require(msg.sender == _user || msg.sender == owner());
+        claimReceiver[_user] = _receiver;
     }
 
     function poolLength() external view returns (uint256) {
@@ -270,7 +280,7 @@ contract MasterChef is Ownable {
 
     // Claim pending rewards for one or more pools.
     // Rewards are not received directly, they are minted by the rewardMinter.
-    function claim(address[] calldata _tokens, address _receiver) external {
+    function claim(address _user, address[] calldata _tokens) external {
         _updateEmissions();
         uint256 pending;
         uint256 _totalAllocPoint = totalAllocPoint;
@@ -278,12 +288,14 @@ contract MasterChef is Ownable {
             PoolInfo storage pool = poolInfo[_tokens[i]];
             require(pool.lastRewardTime > 0);
             _updatePool(_tokens[i], _totalAllocPoint);
-            UserInfo storage user = userInfo[_tokens[i]][msg.sender];
+            UserInfo storage user = userInfo[_tokens[i]][_user];
             pending = pending.add(user.amount.mul(pool.accRewardPerShare).div(1e12).sub(user.rewardDebt));
             user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         }
         if (pending > 0) {
-            rewardMinter.mint(_receiver, pending, true);
+            address receiver = claimReceiver[_user];
+            if (receiver == address(0)) receiver = _user;
+            rewardMinter.mint(receiver, pending, true);
         }
     }
 
