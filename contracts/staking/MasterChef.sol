@@ -37,6 +37,8 @@ contract MasterChef is Ownable {
 
     IMultiFeeDistribution public rewardMinter;
     uint256 public rewardsPerSecond;
+    uint256 public immutable maxMintableTokens;
+    uint256 public mintedTokens;
 
     // Info of each pool.
     address[] public registeredTokens;
@@ -80,7 +82,8 @@ contract MasterChef is Ownable {
         uint128[] memory _startTimeOffset,
         uint128[] memory _rewardsPerSecond,
         address _poolConfigurator,
-        IMultiFeeDistribution _rewardMinter
+        IMultiFeeDistribution _rewardMinter,
+        uint256 _maxMintable
     )
         Ownable()
     {
@@ -95,6 +98,7 @@ contract MasterChef is Ownable {
                 })
             );
         }
+        maxMintableTokens = _maxMintable;
     }
 
     // Start the party
@@ -212,6 +216,18 @@ contract MasterChef is Ownable {
         pool.lastRewardTime = block.timestamp;
     }
 
+
+    function _mint(address _user, uint256 _amount) internal {
+        uint256 minted = mintedTokens;
+        if (minted.add(_amount) > maxMintableTokens) {
+            _amount = maxMintableTokens.sub(minted);
+        }
+        if (_amount > 0) {
+            mintedTokens = minted.add(_amount);
+            rewardMinter.mint(_user, _amount, true);
+        }
+    }
+
     // Deposit LP tokens into the contract. Also triggers a claim.
     function deposit(address _token, uint256 _amount) external {
         PoolInfo storage pool = poolInfo[_token];
@@ -223,7 +239,7 @@ contract MasterChef is Ownable {
                 user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
                     user.rewardDebt
                 );
-            rewardMinter.mint(msg.sender, pending, true);
+            _mint(msg.sender, pending);
         }
         IERC20(_token).safeTransferFrom(
             address(msg.sender),
@@ -251,9 +267,7 @@ contract MasterChef is Ownable {
             user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
                 user.rewardDebt
             );
-        if (pending > 0) {
-            rewardMinter.mint(msg.sender, pending, true);
-        }
+        _mint(msg.sender, pending);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         IERC20(_token).safeTransfer(address(msg.sender), _amount);
@@ -292,11 +306,9 @@ contract MasterChef is Ownable {
             pending = pending.add(user.amount.mul(pool.accRewardPerShare).div(1e12).sub(user.rewardDebt));
             user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         }
-        if (pending > 0) {
-            address receiver = claimReceiver[_user];
-            if (receiver == address(0)) receiver = _user;
-            rewardMinter.mint(receiver, pending, true);
-        }
+        address receiver = claimReceiver[_user];
+        if (receiver == address(0)) receiver = _user;
+        _mint(receiver, pending);
     }
 
 }

@@ -8,7 +8,8 @@ contract TokenVesting {
 
     uint256 public immutable startTime;
     uint256 public constant duration = 86400 * 365;
-    uint256 public immutable totalSupply;
+    uint256 public immutable maxMintableTokens;
+    uint256 public mintedTokens;
     IMultiFeeDistribution public minter;
 
     struct Vest {
@@ -16,42 +17,46 @@ contract TokenVesting {
         uint256 claimed;
     }
 
-    mapping (address => Vest) public vests;
+    mapping(address => Vest) public vests;
 
     constructor(
         IMultiFeeDistribution _minter,
+        uint256 _maxMintable,
         address[] memory _receivers,
         uint256[] memory _amounts
     ) {
         require(_receivers.length == _amounts.length);
         minter = _minter;
-        uint _totalSupply;
-        for (uint i = 0; i < _receivers.length; i++) {
+        uint256 mintable;
+        for (uint256 i = 0; i < _receivers.length; i++) {
             require(vests[_receivers[i]].total == 0);
-            _totalSupply = _totalSupply.add(_amounts[i]);
+            mintable = mintable.add(_amounts[i]);
             vests[_receivers[i]].total = _amounts[i];
         }
-        totalSupply = _totalSupply;
+        require(mintable == _maxMintable);
+        maxMintableTokens = mintable;
         startTime = block.timestamp;
     }
 
     function claimable(address _claimer) external returns (uint256) {
         Vest storage v = vests[msg.sender];
-        uint elapsedTime = block.timestamp.sub(startTime);
+        uint256 elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
-        uint claimable = v.total.div(duration).mul(elapsedTime);
+        uint256 claimable = v.total.div(duration).mul(elapsedTime);
         return claimable.sub(v.claimed);
     }
 
     function claim(address _receiver) external {
         Vest storage v = vests[msg.sender];
-        uint elapsedTime = block.timestamp.sub(startTime);
+        uint256 elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
-        uint claimable = v.total.div(duration).mul(elapsedTime);
+        uint256 claimable = v.total.div(duration).mul(elapsedTime);
         if (claimable > v.claimed) {
-            minter.mint(_receiver, claimable.sub(v.claimed), false);
+            uint256 amount = claimable.sub(v.claimed);
+            mintedTokens = mintedTokens.add(amount);
+            require(mintedTokens <= maxMintableTokens);
+            minter.mint(_receiver, amount, false);
             v.claimed = claimable;
         }
     }
-
 }

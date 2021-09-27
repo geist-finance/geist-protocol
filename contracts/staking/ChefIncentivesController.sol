@@ -38,6 +38,8 @@ contract ChefIncentivesController is Ownable {
 
     IMultiFeeDistribution public rewardMinter;
     uint256 public rewardsPerSecond;
+    uint256 public immutable maxMintableTokens;
+    uint256 public mintedTokens;
 
     // Info of each pool.
     address[] public registeredTokens;
@@ -70,7 +72,8 @@ contract ChefIncentivesController is Ownable {
         uint128[] memory _startTimeOffset,
         uint128[] memory _rewardsPerSecond,
         address _poolConfigurator,
-        IMultiFeeDistribution _rewardMinter
+        IMultiFeeDistribution _rewardMinter,
+        uint256 _maxMintable
     )
         Ownable()
     {
@@ -85,6 +88,7 @@ contract ChefIncentivesController is Ownable {
                 })
             );
         }
+        maxMintableTokens = _maxMintable;
     }
 
     // Start the party
@@ -203,6 +207,17 @@ contract ChefIncentivesController is Ownable {
         pool.lastRewardTime = block.timestamp;
     }
 
+    function _mint(address _user, uint256 _amount) internal {
+        uint256 minted = mintedTokens;
+        if (minted.add(_amount) > maxMintableTokens) {
+            _amount = maxMintableTokens.sub(minted);
+        }
+        if (_amount > 0) {
+            mintedTokens = minted.add(_amount);
+            rewardMinter.mint(_user, _amount, true);
+        }
+    }
+
     function handleAction(address _user, uint256 _balance, uint256 _totalSupply) external {
         PoolInfo storage pool = poolInfo[msg.sender];
         require(pool.lastRewardTime > 0);
@@ -214,7 +229,7 @@ contract ChefIncentivesController is Ownable {
                 user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
                     user.rewardDebt
                 );
-            rewardMinter.mint(_user, pending, true);
+            _mint(_user, pending);
         }
         user.amount = _balance;
         user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
@@ -239,11 +254,9 @@ contract ChefIncentivesController is Ownable {
             pending = pending.add(user.amount.mul(pool.accRewardPerShare).div(1e12).sub(user.rewardDebt));
             user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         }
-        if (pending > 0) {
-            address receiver = claimReceiver[_user];
-            if (receiver == address(0)) receiver = _user;
-            rewardMinter.mint(receiver, pending, true);
-        }
+        address receiver = claimReceiver[_user];
+        if (receiver == address(0)) receiver = _user;
+        _mint(receiver, pending);
     }
 
 }

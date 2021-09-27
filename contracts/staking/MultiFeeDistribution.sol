@@ -280,6 +280,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     // withdrawn before lockDuration has passed.
     function mint(address user, uint256 amount, bool withPenalty) external override updateReward(user) {
         require(minters[msg.sender]);
+        if (amount == 0) return;
         totalSupply = totalSupply.add(amount);
         Balances storage bal = balances[user];
         bal.total = bal.total.add(amount);
