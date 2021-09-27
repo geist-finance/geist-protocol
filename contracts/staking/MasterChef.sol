@@ -3,6 +3,7 @@
 pragma solidity 0.7.6;
 
 import "../interfaces/IMultiFeeDistribution.sol";
+import "../interfaces/IOnwardIncentivesController.sol";
 import "../dependencies/openzeppelin/contracts/IERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
@@ -21,10 +22,10 @@ contract MasterChef is Ownable {
     }
     // Info of each pool.
     struct PoolInfo {
-        uint256 totalSupply;
         uint256 allocPoint; // How many allocation points assigned to this pool.
         uint256 lastRewardTime; // Last second that reward distribution occurs.
         uint256 accRewardPerShare; // Accumulated rewards per share, times 1e12. See below.
+        IOnwardIncentivesController onwardIncentives;
     }
     // Info about token emissions for a given time period.
     struct EmissionPoint {
@@ -105,10 +106,10 @@ contract MasterChef is Ownable {
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
         registeredTokens.push(_token);
         poolInfo[_token] = PoolInfo({
-            totalSupply: 0,
             allocPoint: _allocPoint,
             lastRewardTime: block.timestamp,
-            accRewardPerShare: 0
+            accRewardPerShare: 0,
+            onwardIncentives: IOnwardIncentivesController(0)
         });
     }
 
@@ -129,6 +130,17 @@ contract MasterChef is Ownable {
         totalAllocPoint = _totalAllocPoint;
     }
 
+    function setOnwardIncentives(
+        address _token,
+        IOnwardIncentivesController _incentives
+    )
+        external
+        onlyOwner
+    {
+        require(poolInfo[_token].lastRewardTime != 0);
+        poolInfo[_token].onwardIncentives = _incentives;
+    }
+
     function poolLength() external view returns (uint256) {
         return registeredTokens.length;
     }
@@ -142,7 +154,7 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_token];
         UserInfo storage user = userInfo[_token][_user];
         uint256 accRewardPerShare = pool.accRewardPerShare;
-        uint256 lpSupply = pool.totalSupply;
+        uint256 lpSupply = IERC20(_token).balanceOf(address(this));
         if (block.timestamp > pool.lastRewardTime && lpSupply != 0) {
             uint256 duration = block.timestamp.sub(pool.lastRewardTime);
             uint256 reward = duration.mul(rewardsPerSecond).mul(pool.allocPoint).div(totalAllocPoint);
@@ -179,7 +191,7 @@ contract MasterChef is Ownable {
         if (block.timestamp <= pool.lastRewardTime) {
             return;
         }
-        uint256 lpSupply = pool.totalSupply;
+        uint256 lpSupply = IERC20(_token).balanceOf(address(this));
         if (lpSupply == 0) {
             pool.lastRewardTime = block.timestamp;
             return;
@@ -210,7 +222,12 @@ contract MasterChef is Ownable {
         );
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
+        if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
+            uint256 lpSupply = IERC20(_token).balanceOf(address(this));
+            pool.onwardIncentives.handleAction(_token, msg.sender, user.amount, lpSupply);
+        }
         emit Deposit(_token, msg.sender, _amount);
+
     }
 
     // Withdraw LP tokens. Also triggers a claim.
@@ -230,6 +247,10 @@ contract MasterChef is Ownable {
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         IERC20(_token).safeTransfer(address(msg.sender), _amount);
+        if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
+            uint256 lpSupply = IERC20(_token).balanceOf(address(this));
+            pool.onwardIncentives.handleAction(_token, msg.sender, user.amount, lpSupply);
+        }
         emit Withdraw(_token, msg.sender, _amount);
     }
 
@@ -241,6 +262,10 @@ contract MasterChef is Ownable {
         emit EmergencyWithdraw(_token, msg.sender, user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
+        if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
+            uint256 lpSupply = IERC20(_token).balanceOf(address(this));
+            try pool.onwardIncentives.handleAction(_token, msg.sender, 0, lpSupply) {} catch {}
+        }
     }
 
     // Claim pending rewards for one or more pools.

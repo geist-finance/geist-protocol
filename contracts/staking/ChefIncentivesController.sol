@@ -3,6 +3,7 @@
 pragma solidity 0.7.6;
 
 import "../interfaces/IMultiFeeDistribution.sol";
+import "../interfaces/IOnwardIncentivesController.sol";
 import "../dependencies/openzeppelin/contracts/IERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
@@ -25,6 +26,7 @@ contract ChefIncentivesController is Ownable {
         uint256 allocPoint; // How many allocation points assigned to this pool.
         uint256 lastRewardTime; // Last second that reward distribution occurs.
         uint256 accRewardPerShare; // Accumulated rewards per share, times 1e12. See below.
+        IOnwardIncentivesController onwardIncentives;
     }
     // Info about token emissions for a given time period.
     struct EmissionPoint {
@@ -97,7 +99,8 @@ contract ChefIncentivesController is Ownable {
             totalSupply: 0,
             allocPoint: _allocPoint,
             lastRewardTime: block.timestamp,
-            accRewardPerShare: 0
+            accRewardPerShare: 0,
+            onwardIncentives: IOnwardIncentivesController(0)
         });
     }
 
@@ -116,6 +119,17 @@ contract ChefIncentivesController is Ownable {
             pool.allocPoint = _allocPoints[i];
         }
         totalAllocPoint = _totalAllocPoint;
+    }
+
+    function setOnwardIncentives(
+        address _token,
+        IOnwardIncentivesController _incentives
+    )
+        external
+        onlyOwner
+    {
+        require(poolInfo[_token].lastRewardTime != 0);
+        poolInfo[_token].onwardIncentives = _incentives;
     }
 
     function poolLength() external view returns (uint256) {
@@ -195,6 +209,9 @@ contract ChefIncentivesController is Ownable {
         user.amount = _balance;
         user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         pool.totalSupply = _totalSupply;
+        if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
+            pool.onwardIncentives.handleAction(msg.sender, _user, _balance, _totalSupply);
+        }
         emit BalanceUpdated(msg.sender, _user, _balance, _totalSupply);
     }
 
