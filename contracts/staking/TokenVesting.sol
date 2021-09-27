@@ -1,7 +1,7 @@
 pragma solidity 0.7.6;
 
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
-import "./interfaces/IMultiFeeDistribution.sol";
+import "../interfaces/IMultiFeeDistribution.sol";
 
 contract TokenVesting {
     using SafeMath for uint256;

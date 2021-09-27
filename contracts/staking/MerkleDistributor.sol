@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.7.6;
 
-import "./interfaces/IMultiFeeDistribution.sol";
+import "../interfaces/IMultiFeeDistribution.sol";
 import "../dependencies/openzeppelin/contracts/Ownable.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
 

@@ -2,7 +2,7 @@
 
 pragma solidity 0.7.6;
 
-import "./interfaces/IMultiFeeDistribution.sol";
+import "../interfaces/IMultiFeeDistribution.sol";
 import "../dependencies/openzeppelin/contracts/IERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
