@@ -108,8 +108,7 @@ contract MasterChef is Ownable {
     }
 
     // Add a new lp to the pool. Can only be called by the poolConfigurator.
-    function addPool(address _token, uint256 _allocPoint) external {
-        require(msg.sender == poolConfigurator);
+    function addPool(address _token, uint256 _allocPoint) external onlyOwner {
         require(poolInfo[_token].lastRewardTime == 0);
         _updateEmissions();
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
