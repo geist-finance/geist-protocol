@@ -213,7 +213,7 @@ contract UiPoolDataProvider is IUiPoolDataProvider {
     return (
       reservesData,
       userReservesData,
-      oracle.getAssetPrice(MOCK_USD_ADDRESS),
+      10 ** 8,
       incentivesControllerData
     );
   }
