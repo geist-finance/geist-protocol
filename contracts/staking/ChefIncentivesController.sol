@@ -150,22 +150,25 @@ contract ChefIncentivesController is Ownable {
         return registeredTokens.length;
     }
 
-    // View function to see pending SUSHIs on frontend.
-    function claimableReward(address _token, address _user)
+    function claimableReward(address _user, address[] calldata _tokens)
         external
         view
-        returns (uint256)
+        returns (uint256[] memory)
     {
-        PoolInfo storage pool = poolInfo[_token];
-        UserInfo storage user = userInfo[_token][_user];
-        uint256 accRewardPerShare = pool.accRewardPerShare;
-        uint256 lpSupply = pool.totalSupply;
-        if (block.timestamp > pool.lastRewardTime && lpSupply != 0) {
-            uint256 duration = block.timestamp.sub(pool.lastRewardTime);
-            uint256 reward = duration.mul(rewardsPerSecond).mul(pool.allocPoint).div(totalAllocPoint);
-            accRewardPerShare = accRewardPerShare.add(reward.mul(1e12).div(lpSupply));
+        uint256[] memory claimable = new uint256[](_tokens.length);
+        for (uint256 i = 0; i < _tokens.length; i++) {
+            address token = _tokens[i];
+            PoolInfo storage pool = poolInfo[token];
+            UserInfo storage user = userInfo[token][_user];
+            uint256 accRewardPerShare = pool.accRewardPerShare;
+            uint256 lpSupply = pool.totalSupply;
+            if (block.timestamp > pool.lastRewardTime && lpSupply != 0) {
+                uint256 duration = block.timestamp.sub(pool.lastRewardTime);
+                uint256 reward = duration.mul(rewardsPerSecond).mul(pool.allocPoint).div(totalAllocPoint);
+                accRewardPerShare = accRewardPerShare.add(reward.mul(1e12).div(lpSupply));
+            }
+            claimable[i] = user.amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
         }
-        return user.amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
     }
 
 
