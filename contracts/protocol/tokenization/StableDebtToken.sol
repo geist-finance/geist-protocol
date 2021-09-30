@@ -27,8 +27,6 @@ contract StableDebtToken is IStableDebtToken, DebtTokenBase {
   mapping(address => uint256) internal _usersStableRate;
   uint40 internal _totalSupplyTimestamp;
 
-  ILendingPool internal _pool;
-  address internal _underlyingAsset;
   IAaveIncentivesController internal _incentivesController;
 
   /**

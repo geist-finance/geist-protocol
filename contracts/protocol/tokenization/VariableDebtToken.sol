@@ -21,8 +21,6 @@ contract VariableDebtToken is DebtTokenBase, IVariableDebtToken {
 
   uint256 public constant DEBT_TOKEN_REVISION = 0x1;
 
-  ILendingPool internal _pool;
-  address internal _underlyingAsset;
   IAaveIncentivesController internal _incentivesController;
 
   /**

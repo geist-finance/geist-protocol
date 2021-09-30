@@ -6,6 +6,9 @@ import {IERC20} from '../../dependencies/openzeppelin/contracts/IERC20.sol';
 import {IERC20Detailed} from '../../dependencies/openzeppelin/contracts/IERC20Detailed.sol';
 import {SafeMath} from '../../dependencies/openzeppelin/contracts/SafeMath.sol';
 import {IAaveIncentivesController} from '../../interfaces/IAaveIncentivesController.sol';
+import {ILendingPoolAddressesProvider} from '../../interfaces/ILendingPoolAddressesProvider.sol';
+import {IPriceOracle} from '../../interfaces/IPriceOracle.sol';
+import {ILendingPool} from '../../interfaces/ILendingPool.sol';
 
 /**
  * @title ERC20
@@ -22,6 +25,9 @@ abstract contract IncentivizedERC20 is Context, IERC20, IERC20Detailed {
   string private _name;
   string private _symbol;
   uint8 private _decimals;
+
+  ILendingPool internal _pool;
+  address internal _underlyingAsset;
 
   constructor(
     string memory name,
@@ -252,4 +258,10 @@ abstract contract IncentivizedERC20 is Context, IERC20, IERC20Detailed {
     address to,
     uint256 amount
   ) internal virtual {}
+
+  function getAssetPrice() external view returns (uint256) {
+      ILendingPoolAddressesProvider provider = _pool.getAddressesProvider();
+      address oracle = provider.getPriceOracle();
+      return IPriceOracle(oracle).getAssetPrice(_underlyingAsset);
+  }
 }

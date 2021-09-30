@@ -39,9 +39,7 @@ contract AToken is
 
   bytes32 public DOMAIN_SEPARATOR;
 
-  ILendingPool internal _pool;
   address internal _treasury;
-  address internal _underlyingAsset;
   IAaveIncentivesController internal _incentivesController;
 
   modifier onlyLendingPool {
