@@ -169,6 +169,7 @@ contract ChefIncentivesController is Ownable {
             }
             claimable[i] = user.amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
         }
+        return claimable;
     }
 
 
