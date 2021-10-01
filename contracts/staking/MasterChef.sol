@@ -226,7 +226,9 @@ contract MasterChef is Ownable {
         }
         if (_amount > 0) {
             mintedTokens = minted.add(_amount);
-            rewardMinter.mint(_user, _amount, true);
+            address receiver = claimReceiver[_user];
+            if (receiver == address(0)) receiver = _user;
+            rewardMinter.mint(receiver, _amount, true);
         }
     }
 
@@ -310,9 +312,7 @@ contract MasterChef is Ownable {
             pending = pending.add(user.amount.mul(pool.accRewardPerShare).div(1e12).sub(user.rewardDebt));
             user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
         }
-        address receiver = claimReceiver[_user];
-        if (receiver == address(0)) receiver = _user;
-        _mint(receiver, pending);
+        _mint(_user, pending);
     }
 
 }
