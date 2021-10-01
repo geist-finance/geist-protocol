@@ -233,6 +233,7 @@ contract MasterChef is Ownable {
     // Deposit LP tokens into the contract. Also triggers a claim.
     function deposit(address _token, uint256 _amount) external {
         PoolInfo storage pool = poolInfo[_token];
+        require(pool.lastRewardTime > 0);
         UserInfo storage user = userInfo[_token][msg.sender];
         _updateEmissions();
         _updatePool(_token, totalAllocPoint);
@@ -261,6 +262,7 @@ contract MasterChef is Ownable {
     // Withdraw LP tokens. Also triggers a claim.
     function withdraw(address _token, uint256 _amount) external {
         PoolInfo storage pool = poolInfo[_token];
+        require(pool.lastRewardTime > 0);
         UserInfo storage user = userInfo[_token][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
         _updateEmissions();
