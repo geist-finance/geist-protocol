@@ -284,7 +284,10 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         totalSupply = totalSupply.add(amount);
         Balances storage bal = balances[user];
         bal.total = bal.total.add(amount);
-        if (withPenalty) {
+        if (user == address(this)) {
+            // minting to this contract adds the new tokens as incentives for lockers
+            _notifyReward(address(stakingToken), amount);
+        } else if (withPenalty) {
             bal.earned = bal.earned.add(amount);
             uint256 unlockTime = block.timestamp.div(rewardsDuration).mul(rewardsDuration).add(lockDuration);
             LockedBalance[] storage earnings = userEarnings[user];
