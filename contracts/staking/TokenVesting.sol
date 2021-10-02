@@ -38,8 +38,8 @@ contract TokenVesting {
         startTime = block.timestamp;
     }
 
-    function claimable(address _claimer) external returns (uint256) {
-        Vest storage v = vests[msg.sender];
+    function claimable(address _claimer) external view returns (uint256) {
+        Vest storage v = vests[_claimer];
         uint256 elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
         uint256 claimable = v.total.mul(elapsedTime).div(duration);
