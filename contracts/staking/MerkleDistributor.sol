@@ -44,11 +44,15 @@ contract MerkleDistributor is Ownable {
         startTime = block.timestamp;
     }
 
-    function addClaimRecord(bytes32 _root, uint256 _duration, uint256 _total) external onlyOwner {
-        require(_duration >= minDuration);
+    function mintableBalance() public view returns (uint256) {
         uint elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
-        uint mintable = maxMintableTokens.div(duration).mul(elapsedTime).sub(mintedTokens).sub(reservedTokens);
+        return maxMintableTokens.mul(duration).div(elapsedTime).sub(mintedTokens).sub(reservedTokens);
+    }
+
+    function addClaimRecord(bytes32 _root, uint256 _duration, uint256 _total) external onlyOwner {
+        require(_duration >= minDuration);
+        uint mintable = mintableBalance();
         require(mintable >= _total);
 
         claims.push(ClaimRecord({
