@@ -42,7 +42,7 @@ contract TokenVesting {
         Vest storage v = vests[msg.sender];
         uint256 elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
-        uint256 claimable = v.total.div(duration).mul(elapsedTime);
+        uint256 claimable = v.total.mul(elapsedTime).div(duration);
         return claimable.sub(v.claimed);
     }
 
@@ -50,7 +50,7 @@ contract TokenVesting {
         Vest storage v = vests[msg.sender];
         uint256 elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
-        uint256 claimable = v.total.div(duration).mul(elapsedTime);
+        uint256 claimable = v.total.mul(elapsedTime).div(duration);
         if (claimable > v.claimed) {
             uint256 amount = claimable.sub(v.claimed);
             mintedTokens = mintedTokens.add(amount);
