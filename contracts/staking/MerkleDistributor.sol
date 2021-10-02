@@ -64,7 +64,7 @@ contract MerkleDistributor is Ownable {
     function releaseExpiredClaimReserves(uint256[] calldata _claimIndexes) external {
         for (uint256 i = 0; i < _claimIndexes.length; i++) {
             ClaimRecord storage c = claims[_claimIndexes[i]];
-            require(block.timestamp > c.validUntil);
+            require(block.timestamp > c.validUntil, 'MerkleDistributor: Drop still active.');
             reservedTokens = reservedTokens.sub(c.total.sub(c.claimed));
             c.total = 0;
             c.claimed = 0;
@@ -92,14 +92,14 @@ contract MerkleDistributor is Ownable {
         address _receiver,
         bytes32[] calldata _merkleProof
     ) external {
-        require(_claimIndex < claims.length, "MerkleDistributor: Invalid merkleIndex");
+        require(_claimIndex < claims.length, 'MerkleDistributor: Invalid merkleIndex');
         require(!isClaimed(_claimIndex, _index), 'MerkleDistributor: Drop already claimed.');
 
         ClaimRecord storage c = claims[_claimIndex];
-        require(c.validUntil > block.timestamp);
+        require(c.validUntil > block.timestamp, 'MerkleDistributor: Drop has expired.');
 
         c.claimed = c.claimed.add(_amount);
-        require(c.total >= c.claimed);
+        require(c.total >= c.claimed, 'MerkleDistributor: Exceeds allocated total for drop.');
 
         reservedTokens = reservedTokens.sub(_amount);
         mintedTokens = mintedTokens.add(_amount);
