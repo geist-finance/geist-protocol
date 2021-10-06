@@ -19,7 +19,7 @@ contract MerkleDistributor is Ownable {
     uint256 public immutable maxMintableTokens;
     uint256 public mintedTokens;
     uint256 public reservedTokens;
-    uint256 immutable startTime;
+    uint256 public immutable startTime;
     uint256 public constant duration = 86400 * 365;
     uint256 public constant minDuration = 86400 * 7;
 
@@ -47,7 +47,7 @@ contract MerkleDistributor is Ownable {
     function mintableBalance() public view returns (uint256) {
         uint elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
-        return maxMintableTokens.mul(duration).div(elapsedTime).sub(mintedTokens).sub(reservedTokens);
+        return maxMintableTokens.mul(elapsedTime).div(duration).sub(mintedTokens).sub(reservedTokens);
     }
 
     function addClaimRecord(bytes32 _root, uint256 _duration, uint256 _total) external onlyOwner {
