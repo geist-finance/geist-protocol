@@ -6,11 +6,12 @@ import "../interfaces/IMultiFeeDistribution.sol";
 contract TokenVesting {
     using SafeMath for uint256;
 
-    uint256 public immutable startTime;
+    uint256 public startTime;
     uint256 public constant duration = 86400 * 365;
     uint256 public immutable maxMintableTokens;
     uint256 public mintedTokens;
     IMultiFeeDistribution public minter;
+    address public owner;
 
     struct Vest {
         uint256 total;
@@ -35,10 +36,17 @@ contract TokenVesting {
         }
         require(mintable == _maxMintable);
         maxMintableTokens = mintable;
+        owner = msg.sender;
+    }
+
+    function start() external {
+        require(msg.sender == owner);
+        require(startTime == 0);
         startTime = block.timestamp;
     }
 
     function claimable(address _claimer) external view returns (uint256) {
+        if (startTime == 0) return 0;
         Vest storage v = vests[_claimer];
         uint256 elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
@@ -47,6 +55,7 @@ contract TokenVesting {
     }
 
     function claim(address _receiver) external {
+        require(startTime != 0);
         Vest storage v = vests[msg.sender];
         uint256 elapsedTime = block.timestamp.sub(startTime);
         if (elapsedTime > duration) elapsedTime = duration;
