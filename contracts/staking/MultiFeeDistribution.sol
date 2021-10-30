@@ -288,18 +288,20 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     function mint(address user, uint256 amount, bool withPenalty) external override updateReward(user) {
         require(minters[msg.sender]);
         if (amount == 0) return;
-        totalSupply = totalSupply.add(amount);
-        Balances storage bal = balances[user];
-        bal.total = bal.total.add(amount);
+        stakingToken.mint(address(this), amount);
         if (user == address(this)) {
             // minting to this contract adds the new tokens as incentives for lockers
             _notifyReward(address(stakingToken), amount);
-        } else if (withPenalty) {
+            return;
+        }
+        totalSupply = totalSupply.add(amount);
+        Balances storage bal = balances[user];
+        bal.total = bal.total.add(amount);
+        if (withPenalty) {
             bal.earned = bal.earned.add(amount);
             uint256 unlockTime = block.timestamp.div(rewardsDuration).mul(rewardsDuration).add(lockDuration);
             LockedBalance[] storage earnings = userEarnings[user];
             uint256 idx = earnings.length;
-
             if (idx == 0 || earnings[idx-1].unlockTime < unlockTime) {
                 earnings.push(LockedBalance({amount: amount, unlockTime: unlockTime}));
             } else {
@@ -308,7 +310,6 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         } else {
             bal.unlocked = bal.unlocked.add(amount);
         }
-        stakingToken.mint(address(this), amount);
         emit Staked(user, amount);
     }
 
@@ -463,7 +464,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         uint256 rpt = _rewardPerToken(token, lockedSupply);
         r.rewardPerTokenStored = rpt;
         r.lastUpdateTime = lastTimeRewardApplicable(token);
-        if (account != address(0)) {
+        if (account != address(this)) {
             // Special case, use the locked balances and supply for stakingReward rewards
             rewards[account][token] = _earned(account, token, balances[account].locked, rpt);
             userRewardPerTokenPaid[account][token] = rpt;
@@ -478,7 +479,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
             rpt = _rewardPerToken(token, supply);
             r.rewardPerTokenStored = rpt;
             r.lastUpdateTime = lastTimeRewardApplicable(token);
-            if (account != address(0)) {
+            if (account != address(this)) {
                 rewards[account][token] = _earned(account, token, balance, rpt);
                 userRewardPerTokenPaid[account][token] = rpt;
             }
