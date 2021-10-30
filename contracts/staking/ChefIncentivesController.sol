@@ -190,13 +190,12 @@ contract ChefIncentivesController is Ownable {
         uint256 totalAP = totalAllocPoint;
         uint256 length = registeredTokens.length;
         for (uint256 i = 0; i < length; ++i) {
-            _updatePool(registeredTokens[i], totalAP);
+            _updatePool(poolInfo[registeredTokens[i]], totalAP);
         }
     }
 
     // Update reward variables of the given pool to be up-to-date.
-    function _updatePool(address _token, uint256 _totalAllocPoint) internal {
-        PoolInfo storage pool = poolInfo[_token];
+    function _updatePool(PoolInfo storage pool, uint256 _totalAllocPoint) internal {
         if (block.timestamp <= pool.lastRewardTime) {
             return;
         }
@@ -228,17 +227,16 @@ contract ChefIncentivesController is Ownable {
         PoolInfo storage pool = poolInfo[msg.sender];
         require(pool.lastRewardTime > 0);
         _updateEmissions();
-        _updatePool(msg.sender, totalAllocPoint);
+        _updatePool(pool, totalAllocPoint);
         UserInfo storage user = userInfo[msg.sender][_user];
-        if (user.amount > 0) {
-            uint256 pending =
-                user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
-                    user.rewardDebt
-                );
+        uint256 amount = user.amount;
+        uint256 accRewardPerShare = pool.accRewardPerShare;
+        if (amount > 0) {
+            uint256 pending = amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
             _mint(_user, pending);
         }
         user.amount = _balance;
-        user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
+        user.rewardDebt = _balance.mul(accRewardPerShare).div(1e12);
         pool.totalSupply = _totalSupply;
         if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
             pool.onwardIncentives.handleAction(msg.sender, _user, _balance, _totalSupply);
@@ -255,10 +253,11 @@ contract ChefIncentivesController is Ownable {
         for (uint i = 0; i < _tokens.length; i++) {
             PoolInfo storage pool = poolInfo[_tokens[i]];
             require(pool.lastRewardTime > 0);
-            _updatePool(_tokens[i], _totalAllocPoint);
+            _updatePool(pool, _totalAllocPoint);
             UserInfo storage user = userInfo[_tokens[i]][_user];
-            pending = pending.add(user.amount.mul(pool.accRewardPerShare).div(1e12).sub(user.rewardDebt));
-            user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
+            uint256 rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
+            pending = pending.add(rewardDebt.sub(user.rewardDebt));
+            user.rewardDebt = rewardDebt;
         }
         _mint(_user, pending);
     }
