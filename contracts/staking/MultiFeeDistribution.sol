@@ -231,7 +231,8 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         uint256 penaltyAmount
     ) {
         Balances storage bal = balances[user];
-        if (bal.earned > 0) {
+        uint256 earned = bal.earned;
+        if (earned > 0) {
             uint256 amountWithoutPenalty;
             uint256 length = userEarnings[user].length;
             for (uint i = 0; i < length; i++) {
@@ -243,9 +244,9 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
                 amountWithoutPenalty = amountWithoutPenalty.add(earnedAmount);
             }
 
-            penaltyAmount = bal.earned.sub(amountWithoutPenalty).div(2);
+            penaltyAmount = earned.sub(amountWithoutPenalty).div(2);
         }
-        amount = bal.unlocked.add(bal.earned).sub(penaltyAmount);
+        amount = bal.unlocked.add(earned).sub(penaltyAmount);
         return (amount, penaltyAmount);
     }
 

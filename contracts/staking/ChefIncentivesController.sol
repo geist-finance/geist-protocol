@@ -229,15 +229,14 @@ contract ChefIncentivesController is Ownable {
         _updateEmissions();
         _updatePool(pool, totalAllocPoint);
         UserInfo storage user = userInfo[msg.sender][_user];
-        if (user.amount > 0) {
-            uint256 pending =
-                user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
-                    user.rewardDebt
-                );
+        uint256 amount = user.amount;
+        uint256 accRewardPerShare = pool.accRewardPerShare;
+        if (amount > 0) {
+            uint256 pending = amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
             _mint(_user, pending);
         }
         user.amount = _balance;
-        user.rewardDebt = _balance.mul(pool.accRewardPerShare).div(1e12);
+        user.rewardDebt = _balance.mul(accRewardPerShare).div(1e12);
         pool.totalSupply = _totalSupply;
         if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
             pool.onwardIncentives.handleAction(msg.sender, _user, _balance, _totalSupply);
