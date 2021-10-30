@@ -1,6 +1,7 @@
 pragma solidity 0.7.6;
 pragma abicoder v2;
 
+import "../interfaces/IChefIncentivesController.sol";
 import "../interfaces/IMultiFeeDistribution.sol";
 import "../dependencies/openzeppelin/contracts/IERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
@@ -48,6 +49,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         uint256 amount;
     }
 
+    IChefIncentivesController public incentivesController;
     IMintableToken public immutable stakingToken;
     address[] public rewardTokens;
     mapping(address => Reward) public rewardData;
@@ -93,6 +95,10 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
             minters[_minters[i]] = true;
         }
         mintersAreSet = true;
+    }
+
+    function setIncentivesController(IChefIncentivesController _controller) external onlyOwner {
+        incentivesController = _controller;
     }
 
     // Add a new reward token to be distributed to stakers
@@ -349,6 +355,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         totalSupply = totalSupply.sub(adjustedAmount);
         stakingToken.safeTransfer(msg.sender, amount);
         if (penaltyAmount > 0) {
+            incentivesController.claim(address(this), new address[](0));
             _notifyReward(address(stakingToken), penaltyAmount);
         }
         emit Withdrawn(msg.sender, amount);
@@ -393,6 +400,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         totalSupply = totalSupply.sub(amount.add(penaltyAmount));
         stakingToken.safeTransfer(msg.sender, amount);
         if (penaltyAmount > 0) {
+            incentivesController.claim(address(this), new address[](0));
             _notifyReward(address(stakingToken), penaltyAmount);
         }
         getReward();

@@ -18,4 +18,6 @@ interface IChefIncentivesController {
 
     function addPool(address _token, uint256 _allocPoint) external;
 
+    function claim(address _user, address[] calldata _tokens) external;
+
 }
