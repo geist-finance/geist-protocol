@@ -7,7 +7,6 @@ import "../dependencies/openzeppelin/contracts/IERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
 import "../dependencies/openzeppelin/contracts/Ownable.sol";
-import "../dependencies/openzeppelin/contracts/ReentrancyGuard.sol";
 
 
 interface IMintableToken is IERC20 {
@@ -17,7 +16,7 @@ interface IMintableToken is IERC20 {
 
 // Based on Ellipsis EPS Staker
 // https://github.com/ellipsis-finance/ellipsis/blob/master/contracts/EpsStaker.sol
-contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable {
+contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -260,7 +259,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
 
     // Stake tokens to receive rewards
     // Locked tokens cannot be withdrawn for lockDuration and are eligible to receive stakingReward rewards
-    function stake(uint256 amount, bool lock) external nonReentrant updateReward(msg.sender) {
+    function stake(uint256 amount, bool lock) external updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
         totalSupply = totalSupply.add(amount);
         Balances storage bal = balances[msg.sender];
@@ -316,7 +315,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     // Withdraw staked tokens
     // First withdraws unlocked tokens, then earned tokens. Withdrawing earned tokens
     // incurs a 50% penalty which is distributed based on locked balances.
-    function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
+    function withdraw(uint256 amount) public updateReward(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
         Balances storage bal = balances[msg.sender];
         uint256 penaltyAmount;
@@ -363,7 +362,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     }
 
     // Claim all pending staking rewards
-    function getReward() public nonReentrant updateReward(msg.sender) {
+    function getReward() public updateReward(msg.sender) {
         uint256 length = rewardTokens.length;
         for (uint i; i < length; i++) {
             address token = rewardTokens[i];
