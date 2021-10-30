@@ -121,10 +121,10 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         address _user,
         address _rewardsToken,
         uint256 _balance,
-        uint256 supply
+        uint256 _rewardPerToken
     ) internal view returns (uint256) {
         return _balance.mul(
-            _rewardPerToken(_rewardsToken, supply).sub(userRewardPerTokenPaid[_user][_rewardsToken])
+            _rewardPerToken.sub(userRewardPerTokenPaid[_user][_rewardsToken])
         ).div(1e18).add(rewards[_user][_rewardsToken]);
     }
 
@@ -151,7 +151,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
             uint256 balance = i == 0 ? balances[account].locked : balances[account].total;
             uint256 supply = i == 0 ? lockedSupply : totalSupply;
             rewards[i].token = rewardTokens[i];
-            rewards[i].amount = _earned(account, rewards[i].token, balance, supply);
+            rewards[i].amount = _earned(account, rewards[i].token, balance, _rewardPerToken(rewardTokens[i], supply));
         }
         return rewards;
     }
@@ -450,27 +450,28 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     modifier updateReward(address account) {
         address token = address(stakingToken);
         uint256 balance;
-        uint256 supply = lockedSupply;
         Reward storage r = rewardData[token];
-        r.rewardPerTokenStored = _rewardPerToken(token, supply);
+        uint256 rewardPerToken = _rewardPerToken(token, lockedSupply);
+        r.rewardPerTokenStored = rewardPerToken;
         r.lastUpdateTime = lastTimeRewardApplicable(token);
         if (account != address(0)) {
             // Special case, use the locked balances and supply for stakingReward rewards
-            rewards[account][token] = _earned(account, token, balances[account].locked, supply);
-            userRewardPerTokenPaid[account][token] = r.rewardPerTokenStored;
+            rewards[account][token] = _earned(account, token, balances[account].locked, rewardPerToken);
+            userRewardPerTokenPaid[account][token] = rewardPerToken;
             balance = balances[account].total;
         }
 
-        supply = totalSupply;
+        uint256 supply = totalSupply;
         uint256 length = rewardTokens.length;
         for (uint i = 1; i < length; i++) {
             token = rewardTokens[i];
             r = rewardData[token];
-            r.rewardPerTokenStored = _rewardPerToken(token, supply);
+            rewardPerToken = _rewardPerToken(token, supply);
+            r.rewardPerTokenStored = rewardPerToken;
             r.lastUpdateTime = lastTimeRewardApplicable(token);
             if (account != address(0)) {
-                rewards[account][token] = _earned(account, token, balance, supply);
-                userRewardPerTokenPaid[account][token] = r.rewardPerTokenStored;
+                rewards[account][token] = _earned(account, token, balance, rewardPerToken);
+                userRewardPerTokenPaid[account][token] = rewardPerToken;
             }
         }
         _;
