@@ -51,6 +51,8 @@ contract ChefIncentivesController is Ownable {
     EmissionPoint[] public emissionSchedule;
     // token => user => Info of each user that stakes LP tokens.
     mapping(address => mapping(address => UserInfo)) public userInfo;
+    // user => base claimable balance
+    mapping(address => uint256) public userBaseClaimable;
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
     // The block number when reward mining starts.
@@ -233,7 +235,9 @@ contract ChefIncentivesController is Ownable {
         uint256 accRewardPerShare = pool.accRewardPerShare;
         if (amount > 0) {
             uint256 pending = amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
-            _mint(_user, pending);
+            if (pending > 0) {
+                userBaseClaimable[_user] = userBaseClaimable[_user].add(pending);
+            }
         }
         user.amount = _balance;
         user.rewardDebt = _balance.mul(accRewardPerShare).div(1e12);
@@ -248,7 +252,8 @@ contract ChefIncentivesController is Ownable {
     // Rewards are not received directly, they are minted by the rewardMinter.
     function claim(address _user, address[] calldata _tokens) external {
         _updateEmissions();
-        uint256 pending;
+        uint256 pending = userBaseClaimable[_user];
+        userBaseClaimable[_user] = 0;
         uint256 _totalAllocPoint = totalAllocPoint;
         for (uint i = 0; i < _tokens.length; i++) {
             PoolInfo storage pool = poolInfo[_tokens[i]];
