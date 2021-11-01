@@ -369,12 +369,14 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
         for (uint i; i < length; i++) {
             address token = _rewardTokens[i];
             uint256 reward = rewards[msg.sender][token];
-            if (i > 0) {
+            if (token != address(stakingToken)) {
                 // for rewards other than stakingToken, every 24 hours we check if new
                 // rewards were sent to the contract or accrued via aToken interest
                 Reward storage r = rewardData[token];
+                uint256 periodFinish = r.periodFinish;
+                require(periodFinish > 0, "Unknown reward token");
                 uint256 balance = r.balance;
-                if (r.periodFinish < block.timestamp.add(rewardsDuration - 86400)) {
+                if (periodFinish < block.timestamp.add(rewardsDuration - 86400)) {
                     uint256 unseen = IERC20(token).balanceOf(address(this)).sub(balance);
                     if (unseen > 0) {
                         _notifyReward(token, unseen);
