@@ -145,7 +145,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
     }
 
     function getRewardForDuration(address _rewardsToken) external view returns (uint256) {
-        return rewardData[_rewardsToken].rewardRate.mul(rewardsDuration);
+        return rewardData[_rewardsToken].rewardRate.mul(rewardsDuration).div(1e12);
     }
 
     // Address and claimable amount of all reward tokens for the given account
@@ -156,7 +156,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
             uint256 balance = i == 0 ? balances[account].locked : balances[account].total;
             uint256 supply = i == 0 ? lockedSupply : totalSupply;
             rewards[i].token = rewardTokens[i];
-            rewards[i].amount = _earned(account, rewards[i].token, balance, _rewardPerToken(rewardTokens[i], supply));
+            rewards[i].amount = _earned(account, rewards[i].token, balance, _rewardPerToken(rewardTokens[i], supply)).div(1e12);
         }
         return rewards;
     }
@@ -368,7 +368,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
         uint256 length = _rewardTokens.length;
         for (uint i; i < length; i++) {
             address token = _rewardTokens[i];
-            uint256 reward = rewards[msg.sender][token];
+            uint256 reward = rewards[msg.sender][token].div(1e12);
             if (token != address(stakingToken)) {
                 // for rewards other than stakingToken, every 24 hours we check if new
                 // rewards were sent to the contract or accrued via aToken interest
@@ -448,11 +448,11 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
     function _notifyReward(address _rewardsToken, uint256 reward) internal {
         Reward storage r = rewardData[_rewardsToken];
         if (block.timestamp >= r.periodFinish) {
-            r.rewardRate = reward.div(rewardsDuration);
+            r.rewardRate = reward.mul(1e12).div(rewardsDuration);
         } else {
             uint256 remaining = r.periodFinish.sub(block.timestamp);
-            uint256 leftover = remaining.mul(r.rewardRate);
-            r.rewardRate = reward.add(leftover).div(rewardsDuration);
+            uint256 leftover = remaining.mul(r.rewardRate).div(1e12);
+            r.rewardRate = reward.add(leftover).mul(1e12).div(rewardsDuration);
         }
 
         r.lastUpdateTime = block.timestamp;
