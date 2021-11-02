@@ -1,12 +1,12 @@
 pragma solidity 0.7.6;
 pragma abicoder v2;
 
+import "../interfaces/IChefIncentivesController.sol";
 import "../interfaces/IMultiFeeDistribution.sol";
 import "../dependencies/openzeppelin/contracts/IERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeERC20.sol";
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
 import "../dependencies/openzeppelin/contracts/Ownable.sol";
-import "../dependencies/openzeppelin/contracts/ReentrancyGuard.sol";
 
 
 interface IMintableToken is IERC20 {
@@ -16,7 +16,7 @@ interface IMintableToken is IERC20 {
 
 // Based on Ellipsis EPS Staker
 // https://github.com/ellipsis-finance/ellipsis/blob/master/contracts/EpsStaker.sol
-contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable {
+contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
 
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -48,6 +48,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         uint256 amount;
     }
 
+    IChefIncentivesController public incentivesController;
     IMintableToken public immutable stakingToken;
     address[] public rewardTokens;
     mapping(address => Reward) public rewardData;
@@ -93,6 +94,10 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
             minters[_minters[i]] = true;
         }
         mintersAreSet = true;
+    }
+
+    function setIncentivesController(IChefIncentivesController _controller) external onlyOwner {
+        incentivesController = _controller;
     }
 
     // Add a new reward token to be distributed to stakers
@@ -254,8 +259,9 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
 
     // Stake tokens to receive rewards
     // Locked tokens cannot be withdrawn for lockDuration and are eligible to receive stakingReward rewards
-    function stake(uint256 amount, bool lock) external nonReentrant updateReward(msg.sender) {
+    function stake(uint256 amount, bool lock) external {
         require(amount > 0, "Cannot stake 0");
+        _updateReward(msg.sender);
         totalSupply = totalSupply.add(amount);
         Balances storage bal = balances[msg.sender];
         bal.total = bal.total.add(amount);
@@ -279,21 +285,24 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
     // Mint new tokens
     // Minted tokens receive rewards normally but incur a 50% penalty when
     // withdrawn before lockDuration has passed.
-    function mint(address user, uint256 amount, bool withPenalty) external override updateReward(user) {
+    function mint(address user, uint256 amount, bool withPenalty) external override {
         require(minters[msg.sender]);
         if (amount == 0) return;
-        totalSupply = totalSupply.add(amount);
-        Balances storage bal = balances[user];
-        bal.total = bal.total.add(amount);
+        _updateReward(user);
+        stakingToken.mint(address(this), amount);
         if (user == address(this)) {
             // minting to this contract adds the new tokens as incentives for lockers
             _notifyReward(address(stakingToken), amount);
-        } else if (withPenalty) {
+            return;
+        }
+        totalSupply = totalSupply.add(amount);
+        Balances storage bal = balances[user];
+        bal.total = bal.total.add(amount);
+        if (withPenalty) {
             bal.earned = bal.earned.add(amount);
             uint256 unlockTime = block.timestamp.div(rewardsDuration).mul(rewardsDuration).add(lockDuration);
             LockedBalance[] storage earnings = userEarnings[user];
             uint256 idx = earnings.length;
-
             if (idx == 0 || earnings[idx-1].unlockTime < unlockTime) {
                 earnings.push(LockedBalance({amount: amount, unlockTime: unlockTime}));
             } else {
@@ -302,15 +311,15 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         } else {
             bal.unlocked = bal.unlocked.add(amount);
         }
-        stakingToken.mint(address(this), amount);
         emit Staked(user, amount);
     }
 
     // Withdraw staked tokens
     // First withdraws unlocked tokens, then earned tokens. Withdrawing earned tokens
     // incurs a 50% penalty which is distributed based on locked balances.
-    function withdraw(uint256 amount) public nonReentrant updateReward(msg.sender) {
+    function withdraw(uint256 amount) public {
         require(amount > 0, "Cannot withdraw 0");
+        _updateReward(msg.sender);
         Balances storage bal = balances[msg.sender];
         uint256 penaltyAmount;
 
@@ -349,23 +358,25 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         totalSupply = totalSupply.sub(adjustedAmount);
         stakingToken.safeTransfer(msg.sender, amount);
         if (penaltyAmount > 0) {
+            incentivesController.claim(address(this), new address[](0));
             _notifyReward(address(stakingToken), penaltyAmount);
         }
         emit Withdrawn(msg.sender, amount);
     }
 
-    // Claim all pending staking rewards
-    function getReward() public nonReentrant updateReward(msg.sender) {
-        uint256 length = rewardTokens.length;
+    function _getReward(address[] memory _rewardTokens) internal {
+        uint256 length = _rewardTokens.length;
         for (uint i; i < length; i++) {
-            address token = rewardTokens[i];
+            address token = _rewardTokens[i];
             uint256 reward = rewards[msg.sender][token];
-            if (i > 0) {
+            if (token != address(stakingToken)) {
                 // for rewards other than stakingToken, every 24 hours we check if new
                 // rewards were sent to the contract or accrued via aToken interest
                 Reward storage r = rewardData[token];
+                uint256 periodFinish = r.periodFinish;
+                require(periodFinish > 0, "Unknown reward token");
                 uint256 balance = r.balance;
-                if (r.periodFinish < block.timestamp.add(rewardsDuration - 86400)) {
+                if (periodFinish < block.timestamp.add(rewardsDuration - 86400)) {
                     uint256 unseen = IERC20(token).balanceOf(address(this)).sub(balance);
                     if (unseen > 0) {
                         _notifyReward(token, unseen);
@@ -381,8 +392,15 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         }
     }
 
-    // Withdraw full unlocked balance and claim pending rewards
-    function exit() external updateReward(msg.sender) {
+    // Claim all pending staking rewards
+    function getReward(address[] memory _rewardTokens) public {
+        _updateReward(msg.sender);
+        _getReward(_rewardTokens);
+    }
+
+    // Withdraw full unlocked balance and optionally claim pending rewards
+    function exit(bool claimRewards) external {
+        _updateReward(msg.sender);
         (uint256 amount, uint256 penaltyAmount) = withdrawableBalance(msg.sender);
         delete userEarnings[msg.sender];
         Balances storage bal = balances[msg.sender];
@@ -393,13 +411,17 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         totalSupply = totalSupply.sub(amount.add(penaltyAmount));
         stakingToken.safeTransfer(msg.sender, amount);
         if (penaltyAmount > 0) {
+            incentivesController.claim(address(this), new address[](0));
             _notifyReward(address(stakingToken), penaltyAmount);
         }
-        getReward();
+        if (claimRewards) {
+            _getReward(rewardTokens);
+        }
     }
 
     // Withdraw all currently locked tokens where the unlock time has passed
-    function withdrawExpiredLocks() external updateReward(msg.sender) {
+    function withdrawExpiredLocks() external {
+        _updateReward(msg.sender);
         LockedBalance[] storage locks = userLocks[msg.sender];
         Balances storage bal = balances[msg.sender];
         uint256 amount;
@@ -446,16 +468,14 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
         emit Recovered(tokenAddress, tokenAmount);
     }
 
-    /* ========== MODIFIERS ========== */
-
-    modifier updateReward(address account) {
+    function _updateReward(address account) internal {
         address token = address(stakingToken);
         uint256 balance;
         Reward storage r = rewardData[token];
         uint256 rpt = _rewardPerToken(token, lockedSupply);
         r.rewardPerTokenStored = rpt;
         r.lastUpdateTime = lastTimeRewardApplicable(token);
-        if (account != address(0)) {
+        if (account != address(this)) {
             // Special case, use the locked balances and supply for stakingReward rewards
             rewards[account][token] = _earned(account, token, balances[account].locked, rpt);
             userRewardPerTokenPaid[account][token] = rpt;
@@ -470,12 +490,11 @@ contract MultiFeeDistribution is IMultiFeeDistribution, ReentrancyGuard, Ownable
             rpt = _rewardPerToken(token, supply);
             r.rewardPerTokenStored = rpt;
             r.lastUpdateTime = lastTimeRewardApplicable(token);
-            if (account != address(0)) {
+            if (account != address(this)) {
                 rewards[account][token] = _earned(account, token, balance, rpt);
                 userRewardPerTokenPaid[account][token] = rpt;
             }
         }
-        _;
     }
 
     /* ========== EVENTS ========== */
