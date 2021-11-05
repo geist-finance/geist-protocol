@@ -279,7 +279,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
             bal.unlocked = bal.unlocked.add(amount);
         }
         stakingToken.safeTransferFrom(msg.sender, address(this), amount);
-        emit Staked(msg.sender, amount);
+        emit Staked(msg.sender, amount, lock);
     }
 
     // Mint new tokens
@@ -311,7 +311,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
         } else {
             bal.unlocked = bal.unlocked.add(amount);
         }
-        emit Staked(user, amount);
+        emit Staked(user, amount, false);
     }
 
     // Withdraw staked tokens
@@ -361,7 +361,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
             incentivesController.claim(address(this), new address[](0));
             _notifyReward(address(stakingToken), penaltyAmount);
         }
-        emit Withdrawn(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount, penaltyAmount);
     }
 
     function _getReward(address[] memory _rewardTokens) internal {
@@ -417,6 +417,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
         if (claimRewards) {
             _getReward(rewardTokens);
         }
+        emit Withdrawn(msg.sender, amount, penaltyAmount);
     }
 
     // Withdraw all currently locked tokens where the unlock time has passed
@@ -441,6 +442,7 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
         totalSupply = totalSupply.sub(amount);
         lockedSupply = lockedSupply.sub(amount);
         stakingToken.safeTransfer(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount, 0);
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */
@@ -500,8 +502,8 @@ contract MultiFeeDistribution is IMultiFeeDistribution, Ownable {
     /* ========== EVENTS ========== */
 
     event RewardAdded(uint256 reward);
-    event Staked(address indexed user, uint256 amount);
-    event Withdrawn(address indexed user, uint256 amount);
+    event Staked(address indexed user, uint256 amount, bool locked);
+    event Withdrawn(address indexed user, uint256 receivedAmount, uint256 penaltyPaid);
     event RewardPaid(address indexed user, address indexed rewardsToken, uint256 reward);
     event RewardsDurationUpdated(address token, uint256 newDuration);
     event Recovered(address token, uint256 amount);
