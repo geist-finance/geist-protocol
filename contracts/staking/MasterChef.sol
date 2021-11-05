@@ -50,6 +50,8 @@ contract MasterChef is Ownable {
     EmissionPoint[] public emissionSchedule;
     // token => user => Info of each user that stakes LP tokens.
     mapping(address => mapping(address => UserInfo)) public userInfo;
+    // user => base claimable balance
+    mapping(address => uint256) public userBaseClaimable;
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
     // The block number when reward mining starts.
@@ -218,7 +220,6 @@ contract MasterChef is Ownable {
         pool.lastRewardTime = block.timestamp;
     }
 
-
     function _mint(address _user, uint256 _amount) internal {
         uint256 minted = mintedTokens;
         if (minted.add(_amount) > maxMintableTokens) {
@@ -236,26 +237,28 @@ contract MasterChef is Ownable {
     function deposit(address _token, uint256 _amount) external {
         PoolInfo storage pool = poolInfo[_token];
         require(pool.lastRewardTime > 0);
-        UserInfo storage user = userInfo[_token][msg.sender];
         _updateEmissions();
         _updatePool(_token, totalAllocPoint);
-        if (user.amount > 0) {
-            uint256 pending =
-                user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
-                    user.rewardDebt
-                );
-            _mint(msg.sender, pending);
+        UserInfo storage user = userInfo[_token][msg.sender];
+        uint256 amount = user.amount;
+        uint256 accRewardPerShare = pool.accRewardPerShare;
+        if (amount > 0) {
+            uint256 pending = amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+            if (pending > 0) {
+                userBaseClaimable[msg.sender] = userBaseClaimable[msg.sender].add(pending);
+            }
         }
         IERC20(_token).safeTransferFrom(
             address(msg.sender),
             address(this),
             _amount
         );
-        user.amount = user.amount.add(_amount);
-        user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
+        amount = amount.add(_amount);
+        user.amount = amount;
+        user.rewardDebt = amount.mul(accRewardPerShare).div(1e12);
         if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
             uint256 lpSupply = IERC20(_token).balanceOf(address(this));
-            pool.onwardIncentives.handleAction(_token, msg.sender, user.amount, lpSupply);
+            pool.onwardIncentives.handleAction(_token, msg.sender, amount, lpSupply);
         }
         emit Deposit(_token, msg.sender, _amount);
 
@@ -266,20 +269,22 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_token];
         require(pool.lastRewardTime > 0);
         UserInfo storage user = userInfo[_token][msg.sender];
-        require(user.amount >= _amount, "withdraw: not good");
+        uint256 amount = user.amount;
+        require(amount >= _amount, "withdraw: not good");
         _updateEmissions();
         _updatePool(_token, totalAllocPoint);
-        uint256 pending =
-            user.amount.mul(pool.accRewardPerShare).div(1e12).sub(
-                user.rewardDebt
-            );
-        _mint(msg.sender, pending);
-        user.amount = user.amount.sub(_amount);
-        user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
+        uint256 accRewardPerShare = pool.accRewardPerShare;
+        uint256 pending = amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+        if (pending > 0) {
+            userBaseClaimable[msg.sender] = userBaseClaimable[msg.sender].add(pending);
+        }
+        amount = amount.sub(_amount);
+        user.amount = amount;
+        user.rewardDebt = amount.mul(accRewardPerShare).div(1e12);
         IERC20(_token).safeTransfer(address(msg.sender), _amount);
         if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
             uint256 lpSupply = IERC20(_token).balanceOf(address(this));
-            pool.onwardIncentives.handleAction(_token, msg.sender, user.amount, lpSupply);
+            pool.onwardIncentives.handleAction(_token, msg.sender, amount, lpSupply);
         }
         emit Withdraw(_token, msg.sender, _amount);
     }
@@ -288,8 +293,9 @@ contract MasterChef is Ownable {
     function emergencyWithdraw(address _token) external {
         PoolInfo storage pool = poolInfo[_token];
         UserInfo storage user = userInfo[_token][msg.sender];
-        IERC20(_token).safeTransfer(address(msg.sender), user.amount);
-        emit EmergencyWithdraw(_token, msg.sender, user.amount);
+        uint256 amount = user.amount;
+        IERC20(_token).safeTransfer(address(msg.sender), amount);
+        emit EmergencyWithdraw(_token, msg.sender, amount);
         user.amount = 0;
         user.rewardDebt = 0;
         if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
@@ -302,15 +308,17 @@ contract MasterChef is Ownable {
     // Rewards are not received directly, they are minted by the rewardMinter.
     function claim(address _user, address[] calldata _tokens) external {
         _updateEmissions();
-        uint256 pending;
+        uint256 pending = userBaseClaimable[_user];
+        userBaseClaimable[_user] = 0;
         uint256 _totalAllocPoint = totalAllocPoint;
         for (uint i = 0; i < _tokens.length; i++) {
             PoolInfo storage pool = poolInfo[_tokens[i]];
             require(pool.lastRewardTime > 0);
             _updatePool(_tokens[i], _totalAllocPoint);
             UserInfo storage user = userInfo[_tokens[i]][_user];
-            pending = pending.add(user.amount.mul(pool.accRewardPerShare).div(1e12).sub(user.rewardDebt));
-            user.rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
+            uint256 rewardDebt = user.amount.mul(pool.accRewardPerShare).div(1e12);
+            pending = pending.add(rewardDebt.sub(user.rewardDebt));
+            user.rewardDebt = rewardDebt;
         }
         _mint(_user, pending);
     }
