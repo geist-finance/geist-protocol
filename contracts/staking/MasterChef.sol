@@ -240,10 +240,10 @@ contract MasterChef is Ownable {
         _updateEmissions();
         _updatePool(_token, totalAllocPoint);
         UserInfo storage user = userInfo[_token][msg.sender];
-        uint256 amount = user.amount;
+        uint256 userAmount = user.amount;
         uint256 accRewardPerShare = pool.accRewardPerShare;
-        if (amount > 0) {
-            uint256 pending = amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+        if (userAmount > 0) {
+            uint256 pending = userAmount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
             if (pending > 0) {
                 userBaseClaimable[msg.sender] = userBaseClaimable[msg.sender].add(pending);
             }
@@ -253,12 +253,12 @@ contract MasterChef is Ownable {
             address(this),
             _amount
         );
-        amount = amount.add(_amount);
-        user.amount = amount;
-        user.rewardDebt = amount.mul(accRewardPerShare).div(1e12);
+        userAmount = userAmount.add(_amount);
+        user.amount = userAmount;
+        user.rewardDebt = userAmount.mul(accRewardPerShare).div(1e12);
         if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
             uint256 lpSupply = IERC20(_token).balanceOf(address(this));
-            pool.onwardIncentives.handleAction(_token, msg.sender, amount, lpSupply);
+            pool.onwardIncentives.handleAction(_token, msg.sender, userAmount, lpSupply);
         }
         emit Deposit(_token, msg.sender, _amount);
 
@@ -269,22 +269,22 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_token];
         require(pool.lastRewardTime > 0);
         UserInfo storage user = userInfo[_token][msg.sender];
-        uint256 amount = user.amount;
-        require(amount >= _amount, "withdraw: not good");
+        uint256 userAmount = user.amount;
+        require(userAmount >= _amount, "withdraw: not good");
         _updateEmissions();
         _updatePool(_token, totalAllocPoint);
         uint256 accRewardPerShare = pool.accRewardPerShare;
-        uint256 pending = amount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
+        uint256 pending = userAmount.mul(accRewardPerShare).div(1e12).sub(user.rewardDebt);
         if (pending > 0) {
             userBaseClaimable[msg.sender] = userBaseClaimable[msg.sender].add(pending);
         }
-        amount = amount.sub(_amount);
-        user.amount = amount;
-        user.rewardDebt = amount.mul(accRewardPerShare).div(1e12);
+        userAmount = userAmount.sub(_amount);
+        user.amount = userAmount;
+        user.rewardDebt = userAmount.mul(accRewardPerShare).div(1e12);
         IERC20(_token).safeTransfer(address(msg.sender), _amount);
         if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
             uint256 lpSupply = IERC20(_token).balanceOf(address(this));
-            pool.onwardIncentives.handleAction(_token, msg.sender, amount, lpSupply);
+            pool.onwardIncentives.handleAction(_token, msg.sender, userAmount, lpSupply);
         }
         emit Withdraw(_token, msg.sender, _amount);
     }
