@@ -288,10 +288,11 @@ contract MasterChef is Ownable {
     function emergencyWithdraw(address _token) external {
         PoolInfo storage pool = poolInfo[_token];
         UserInfo storage user = userInfo[_token][msg.sender];
-        IERC20(_token).safeTransfer(address(msg.sender), user.amount);
-        emit EmergencyWithdraw(_token, msg.sender, user.amount);
+        uint amount = user.amount;
         user.amount = 0;
         user.rewardDebt = 0;
+        IERC20(_token).safeTransfer(address(msg.sender), amount);
+        emit EmergencyWithdraw(_token, msg.sender, amount);
         if (pool.onwardIncentives != IOnwardIncentivesController(0)) {
             uint256 lpSupply = IERC20(_token).balanceOf(address(this));
             try pool.onwardIncentives.handleAction(_token, msg.sender, 0, lpSupply) {} catch {}
