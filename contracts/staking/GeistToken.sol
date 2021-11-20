@@ -11,7 +11,7 @@ contract GeistToken is IERC20 {
 
     string public constant symbol = "GEIST";
     string public constant name = "Geist.Finance Protocol Token";
-    uint256 public constant decimals = 18;
+    uint8 public constant decimals = 18;
     uint256 public override totalSupply;
     uint256 public immutable maxTotalSupply;
     address public minter;
