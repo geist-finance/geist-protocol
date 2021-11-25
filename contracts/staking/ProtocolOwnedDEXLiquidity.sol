@@ -2,6 +2,7 @@ pragma solidity 0.7.6;
 
 import "../dependencies/openzeppelin/contracts/SafeMath.sol";
 import "../dependencies/openzeppelin/contracts/IERC20.sol";
+import "../dependencies/openzeppelin/contracts/Ownable.sol";
 import "../interfaces/IChefIncentivesController.sol";
 
 interface IUniswapLPToken {
@@ -27,7 +28,7 @@ interface IMultiFeeDistribution {
     function lockedSupply() external view returns (uint256);
 }
 
-contract ProtocolOwnedDEXLiquidity {
+contract ProtocolOwnedDEXLiquidity is Ownable {
 
     using SafeMath for uint256;
 
@@ -44,24 +45,46 @@ contract ProtocolOwnedDEXLiquidity {
     mapping (address => UserRecord) public userData;
 
     uint public totalSoldFTM;
+    uint public minBuyAmount;
+    uint public minSuperPODLLock;
+    uint public buyCooldown;
+    uint public superPODLCooldown;
     uint public lockedBalanceMultiplier;
 
     event SoldFTM(
         address indexed buyer,
         uint256 amount
     );
-    event AaaaaaahAndImSuperPODLiiiiiiiing(
+    event AaaaaaahAndImSuperPODLiiiiing(
         address indexed podler,
         uint256 amount
     );
 
     constructor(
-        uint256 _lockMultiplier
-    ) {
+        uint256 _lockMultiplier,
+        uint256 _minBuy,
+        uint256 _minLock,
+        uint256 _cooldown,
+        uint256 _podlCooldown
+    ) Ownable() {
         IChefIncentivesController chef = IChefIncentivesController(0x297FddC5c33Ef988dd03bd13e162aE084ea1fE57);
         chef.setClaimReceiver(address(this), address(treasury));
+        setParams(_lockMultiplier, _minBuy, _minLock, _cooldown, _podlCooldown);
+    }
 
+    function setParams(
+        uint256 _lockMultiplier,
+        uint256 _minBuy,
+        uint256 _minLock,
+        uint256 _cooldown,
+        uint256 _podlCooldown
+    ) public onlyOwner {
+        require(_minBuy >= 1e18);
         lockedBalanceMultiplier = _lockMultiplier;
+        minBuyAmount = _minBuy;
+        minSuperPODLLock = _minLock;
+        buyCooldown = _cooldown;
+        superPODLCooldown = _podlCooldown;
     }
 
     function protocolOwnedReserves() public view returns (uint256 wftm, uint256 geist) {
@@ -95,6 +118,7 @@ contract ProtocolOwnedDEXLiquidity {
     }
 
     function _buy(uint _amount, uint _cooldownTime) internal {
+        require(_amount >= minBuyAmount, "Below min buy amount");
         uint lpAmount = _amount.mul(lpTokensPerOneFTM()).div(1e18);
         lpToken.transferFrom(msg.sender, address(this), lpAmount);
         gFTM.transfer(msg.sender, _amount);
@@ -110,14 +134,13 @@ contract ProtocolOwnedDEXLiquidity {
     }
 
     function buyFTM(uint256 _amount) public {
-        require(_amount >= 1e18, "Must purchase at least 1 WFTM");
-        require(_amount >= availableForUser(msg.sender), "Amount exceeds user limit");
-        _buy(_amount, 86400);
+        require(_amount <= availableForUser(msg.sender), "Amount exceeds user limit");
+        _buy(_amount, buyCooldown);
     }
 
     function superPODL(uint256 _amount) public {
-        require(_amount >= 1e18, "Must purchase at least 1 WFTM");
-        _buy(_amount, 604800);
-        emit AaaaaaahAndImSuperPODLiiiiiiiing(msg.sender, _amount);
+        require(treasury.lockedBalances(msg.sender) >= minSuperPODLLock, "Need to lock GEIST!");
+        _buy(_amount, superPODLCooldown);
+        emit AaaaaaahAndImSuperPODLiiiiing(msg.sender, _amount);
     }
 }
