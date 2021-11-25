@@ -50,6 +50,10 @@ contract ProtocolOwnedDEXLiquidity {
         address indexed buyer,
         uint256 amount
     );
+    event AaaaaaahAndImSuperPODLiiiiiiiing(
+        address indexed podler,
+        uint256 amount
+    );
 
     constructor(
         uint256 _lockMultiplier
@@ -90,21 +94,30 @@ contract ProtocolOwnedDEXLiquidity {
         return totalSupply.mul(1e18).mul(45).div(reserve1).div(100);
     }
 
-    function buyFTM(uint256 amount) public {
-        require(amount >= 1e18, "Must purchase at least 1 WFTM");
-        require(amount >= availableForUser(msg.sender), "Amount exceeds user limit");
-
-        uint lpAmount = amount.mul(lpTokensPerOneFTM()).div(1e18);
+    function _buy(uint _amount, uint _cooldownTime) internal {
+        uint lpAmount = _amount.mul(lpTokensPerOneFTM()).div(1e18);
         lpToken.transferFrom(msg.sender, address(this), lpAmount);
-        gFTM.transfer(msg.sender, amount);
-        gFTM.transfer(address(treasury), amount);
+        gFTM.transfer(msg.sender, _amount);
+        gFTM.transfer(address(treasury), _amount);
 
         UserRecord storage u = userData[msg.sender];
-        u.nextClaimTime = block.timestamp.add(86400);
+        u.nextClaimTime = block.timestamp.add(_cooldownTime);
         u.claimCount = u.claimCount.add(1);
-        u.totalBoughtFTM = u.totalBoughtFTM.add(amount);
-        totalSoldFTM = totalSoldFTM.add(amount);
+        u.totalBoughtFTM = u.totalBoughtFTM.add(_amount);
+        totalSoldFTM = totalSoldFTM.add(_amount);
 
-        emit SoldFTM(msg.sender, amount);
+        emit SoldFTM(msg.sender, _amount);
+    }
+
+    function buyFTM(uint256 _amount) public {
+        require(_amount >= 1e18, "Must purchase at least 1 WFTM");
+        require(_amount >= availableForUser(msg.sender), "Amount exceeds user limit");
+        _buy(_amount, 86400);
+    }
+
+    function superPODL(uint256 _amount) public {
+        require(_amount >= 1e18, "Must purchase at least 1 WFTM");
+        _buy(_amount, 604800);
+        emit AaaaaaahAndImSuperPODLiiiiiiiing(msg.sender, _amount);
     }
 }
