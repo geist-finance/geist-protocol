@@ -22,6 +22,10 @@ interface IUniswapLPToken {
     ) external returns (bool);
 }
 
+interface IMultiFeeDistribution {
+    function lockedBalances(address user) view external returns (uint256);
+    function lockedSupply() external view returns (uint256);
+}
 
 contract ProtocolOwnedDEXLiquidity {
 
@@ -29,18 +33,31 @@ contract ProtocolOwnedDEXLiquidity {
 
     IUniswapLPToken constant public lpToken = IUniswapLPToken(0x668AE94D0870230AC007a01B471D02b2c94DDcB9);
     IERC20 constant public gFTM = IERC20(0x39B3bd37208CBaDE74D0fcBDBb12D606295b430a);
-    address constant public treasury = 0x49c93a95dbcc9A6A4D8f77E59c038ce5020e82f8;
+    IMultiFeeDistribution constant public treasury = IMultiFeeDistribution(0x49c93a95dbcc9A6A4D8f77E59c038ce5020e82f8);
+
+    struct UserRecord {
+        uint256 nextClaimTime;
+        uint256 claimCount;
+        uint256 totalBoughtFTM;
+    }
+
+    mapping (address => UserRecord) public userData;
 
     uint public totalSoldFTM;
+    uint public lockedBalanceMultiplier;
 
     event SoldFTM(
         address indexed buyer,
         uint256 amount
     );
 
-    constructor() {
+    constructor(
+        uint256 _lockMultiplier
+    ) {
         IChefIncentivesController chef = IChefIncentivesController(0x297FddC5c33Ef988dd03bd13e162aE084ea1fE57);
-        chef.setClaimReceiver(address(this), treasury);
+        chef.setClaimReceiver(address(this), address(treasury));
+
+        lockedBalanceMultiplier = _lockMultiplier;
     }
 
     function protocolOwnedReserves() public view returns (uint256 wftm, uint256 geist) {
@@ -54,6 +71,19 @@ contract ProtocolOwnedDEXLiquidity {
         return gFTM.balanceOf(address(this)) / 2;
     }
 
+    function availableForUser(address _user) public view returns (uint256) {
+        UserRecord storage u = userData[_user];
+        if (u.nextClaimTime > block.timestamp) return 0;
+        uint available = availableFTM();
+        uint userLocked = treasury.lockedBalances(_user);
+        uint totalLocked = treasury.lockedSupply();
+        uint amount = available.mul(lockedBalanceMultiplier).mul(userLocked).div(totalLocked);
+        if (amount > available) {
+            return available;
+        }
+        return amount;
+    }
+
     function lpTokensPerOneFTM() public view returns (uint256) {
         uint totalSupply = lpToken.totalSupply();
         (,uint reserve1,) = lpToken.getReserves();
@@ -62,12 +92,19 @@ contract ProtocolOwnedDEXLiquidity {
 
     function buyFTM(uint256 amount) public {
         require(amount >= 1e18, "Must purchase at least 1 WFTM");
+        require(amount >= availableForUser(msg.sender), "Amount exceeds user limit");
+
         uint lpAmount = amount.mul(lpTokensPerOneFTM()).div(1e18);
         lpToken.transferFrom(msg.sender, address(this), lpAmount);
         gFTM.transfer(msg.sender, amount);
-        gFTM.transfer(treasury, amount);
+        gFTM.transfer(address(treasury), amount);
+
+        UserRecord storage u = userData[msg.sender];
+        u.nextClaimTime = block.timestamp.add(86400);
+        u.claimCount = u.claimCount.add(1);
+        u.totalBoughtFTM = u.totalBoughtFTM.add(amount);
         totalSoldFTM = totalSoldFTM.add(amount);
+
         emit SoldFTM(msg.sender, amount);
     }
 }
-
