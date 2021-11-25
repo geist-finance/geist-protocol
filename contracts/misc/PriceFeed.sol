@@ -341,8 +341,8 @@ contract PriceFeed is IPriceFeed {
         if (_response.roundId == 0) {return true;}
         // Check for an invalid timeStamp that is 0, or in the future
         if (_response.timestamp == 0 || _response.timestamp > block.timestamp) {return true;}
-        // Check for non-positive price
-        if (_response.answer <= 0) {return true;}
+        // Check for non-positive price (original value returned from chainlink is int256)
+        if (int256(_response.answer) <= 0) {return true;}
 
         return false;
     }
