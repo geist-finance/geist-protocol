@@ -113,8 +113,8 @@ contract ProtocolOwnedDEXLiquidity is Ownable {
 
     function lpTokensPerOneFTM() public view returns (uint256) {
         uint totalSupply = lpToken.totalSupply();
-        (,uint reserve1,) = lpToken.getReserves();
-        return totalSupply.mul(1e18).mul(45).div(reserve1).div(100);
+        (uint reserve0,,) = lpToken.getReserves();
+        return totalSupply.mul(1e18).mul(45).div(reserve0).div(100);
     }
 
     function _buy(uint _amount, uint _cooldownTime) internal {
