@@ -35,6 +35,7 @@ contract ProtocolOwnedDEXLiquidity is Ownable {
     IUniswapLPToken constant public lpToken = IUniswapLPToken(0x668AE94D0870230AC007a01B471D02b2c94DDcB9);
     IERC20 constant public gFTM = IERC20(0x39B3bd37208CBaDE74D0fcBDBb12D606295b430a);
     IMultiFeeDistribution constant public treasury = IMultiFeeDistribution(0x49c93a95dbcc9A6A4D8f77E59c038ce5020e82f8);
+    address constant public burn = 0x07b84B5855A8B271C4F461993D724eCD7a826AAE;
 
     struct UserRecord {
         uint256 nextClaimTime;
@@ -89,7 +90,7 @@ contract ProtocolOwnedDEXLiquidity is Ownable {
 
     function protocolOwnedReserves() public view returns (uint256 wftm, uint256 geist) {
         (uint reserve0, uint reserve1,) = lpToken.getReserves();
-        uint balance = lpToken.balanceOf(address(this));
+        uint balance = lpToken.balanceOf(burn);
         uint totalSupply = lpToken.totalSupply();
         return (reserve0.mul(balance).div(totalSupply), reserve1.mul(balance).div(totalSupply));
     }
@@ -118,13 +119,16 @@ contract ProtocolOwnedDEXLiquidity is Ownable {
     }
 
     function _buy(uint _amount, uint _cooldownTime) internal {
+        UserRecord storage u = userData[msg.sender];
+
         require(_amount >= minBuyAmount, "Below min buy amount");
+        require(block.timestamp >= u.nextClaimTime, "Claimed too recently");
+
         uint lpAmount = _amount.mul(lpTokensPerOneFTM()).div(1e18);
-        lpToken.transferFrom(msg.sender, address(this), lpAmount);
+        lpToken.transferFrom(msg.sender, burn, lpAmount);
         gFTM.transfer(msg.sender, _amount);
         gFTM.transfer(address(treasury), _amount);
 
-        UserRecord storage u = userData[msg.sender];
         u.nextClaimTime = block.timestamp.add(_cooldownTime);
         u.claimCount = u.claimCount.add(1);
         u.totalBoughtFTM = u.totalBoughtFTM.add(_amount);
